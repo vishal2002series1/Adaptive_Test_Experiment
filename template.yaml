@@ -8,13 +8,17 @@ Resources:
   StudentProfileTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: UPSC_Student_Profiles
+      TableName: AdaptiveStudentProfiles  # <-- Exam agnostic name
       AttributeDefinitions:
         - AttributeName: student_id
+          AttributeType: S
+        - AttributeName: target_exam      # <-- Added Sort Key attribute
           AttributeType: S
       KeySchema:
         - AttributeName: student_id
           KeyType: HASH
+        - AttributeName: target_exam      # <-- Defined as RANGE (Sort)
+          KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
   # 2. The LangGraph Multi-Agent Lambda Function

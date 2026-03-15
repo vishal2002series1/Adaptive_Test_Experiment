@@ -8,6 +8,8 @@ from google.genai import types
 from langgraph.graph import StateGraph, END
 from schema import AdaptiveTestState, Question
 from vector_store import retrieve_best_question
+from datetime import datetime
+current_year = datetime.now().year
 
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
@@ -18,15 +20,27 @@ client = genai.Client(api_key=api_key)
 # ==========================================
 
 def orchestrator_node(state: AdaptiveTestState) -> dict:
-    """Calculates the deficit and sets the batch target."""
+    """Calculates the deficit, analyzes history, and sets the batch target."""
+    profile = state["profile"]
+    config = state["config"]
+    
+    # --- NEW: Adaptive Logic vs Override Logic ---
+    if config.adaptive_mode and profile.topic_proficiencies:
+        # Find the topic with the lowest historical proficiency score
+        weakest_topic = min(profile.topic_proficiencies, key=profile.topic_proficiencies.get)
+        print(f"🧠 Orchestrator [ADAPTIVE]: Identified weakest area -> {weakest_topic}")
+        config.target_topic = weakest_topic 
+    else:
+        print(f"🎯 Orchestrator [MANUAL/DEFAULT]: Targeting -> {config.target_topic}")
+
     current_count = len(state.get("selected_questions", []))
-    target_count = state["config"].num_questions
+    target_count = config.num_questions
     deficit = target_count - current_count
     
     print(f"\n📊 Orchestrator: {current_count}/{target_count} questions ready. Deficit: {deficit}")
     
     if deficit <= 0:
-        return {"current_batch_target": 0}
+        return {"current_batch_target": 0, "config": config}
         
     # Process in chunks of 5 to keep search grounding deep and accurate
     batch_size = min(deficit, 5) 
@@ -35,7 +49,8 @@ def orchestrator_node(state: AdaptiveTestState) -> dict:
         "current_batch_target": batch_size,
         "generation_attempts": 0,
         "draft_batch": [],
-        "rejected_batch": []
+        "rejected_batch": [],
+        "config": config  # Pass the updated config forward
     }
 
 def database_retriever_node(state: AdaptiveTestState) -> dict:
@@ -47,27 +62,23 @@ def database_retriever_node(state: AdaptiveTestState) -> dict:
     print(f"🔍 Retriever: Searching DB for up to {target} questions...")
     found_questions = []
     
-    # Get IDs of questions already in the final test
     existing_ids = [existing.id for existing in state.get("selected_questions", [])]
     
     for _ in range(target):
-        # Combine existing test IDs with the ones we JUST found in this loop
         current_exclude_ids = existing_ids + [fq.id for fq in found_questions]
         
         q = retrieve_best_question(
             target_exam=state["profile"].target_exam,
             target_subject=state["config"].target_subject,
-            target_topic="Monetary Policy", 
+            target_topic=state["config"].target_topic,  # <-- NEW: Dynamic Topic
             target_difficulty=state["config"].target_difficulty,
             student_profile=state["profile"],
-            exclude_ids=current_exclude_ids  # <--- Pass the dynamic list here
+            exclude_ids=current_exclude_ids
         )
         
         if q:
             found_questions.append(q)
         else:
-            # If the DB returns None, we've exhausted all good DB questions.
-            # Break the loop early and let the LLM generate the rest!
             break 
             
     print(f"✅ Retriever: Found {len(found_questions)} suitable questions in DB.")
@@ -83,18 +94,14 @@ def generator_node(state: AdaptiveTestState) -> dict:
     target = state.get("current_batch_target", 0)
     rejected = state.get("rejected_batch", [])
     
-    # If we have rejected questions, we only regenerate those. Otherwise, we generate new ones.
     num_to_generate = len(rejected) if rejected else target
     
     if num_to_generate <= 0:
          return {"draft_batch": []}
          
-    print(f"✍️ Generator: Drafting batch of {num_to_generate} questions via Gemini...")
+    topic = state["config"].target_topic  # <-- NEW: Dynamic Topic
+    print(f"✍️ Generator: Drafting batch of {num_to_generate} questions on '{topic}' via Gemini...")
     
-    topic = "Monetary Policy"
-    
-    # --- NEW: Concept Collision Logic ---
-    # Gather the text of questions already in the test (from DB and previous batches)
     existing_questions = state.get("selected_questions", [])
     
     collision_context = ""
@@ -103,7 +110,6 @@ def generator_node(state: AdaptiveTestState) -> dict:
         for i, eq in enumerate(existing_questions, 1):
             collision_context += f"Existing Q{i}: {eq.text}\n"
 
-    # Inject specific feedback if we are fixing broken questions
     feedback_context = ""
     if rejected:
         feedback_context = "CRITICAL: Fix the following rejected questions based on this feedback:\n"
@@ -111,13 +117,17 @@ def generator_node(state: AdaptiveTestState) -> dict:
             feedback_context += f"- ID {r['id']}: {r['feedback']}\n"
             
     prompt = f"""
-    Generate a JSON array containing EXACTLY {num_to_generate} highly accurate UPSC Prelims questions about {topic}.
+    Generate a JSON array containing EXACTLY {num_to_generate} highly accurate {state['profile'].target_exam} Prelims questions about {topic}.
+    
+    CURRENT YEAR: {current_year-1} to {current_year}
     
     {collision_context}
     
     {feedback_context}
     
     REQUIREMENTS:
+    - CRITICAL: You are equipped with a Google Search tool. You MUST use it to prioritize current affairs, newly passed legislations, recent supreme court judgments, and scientific developments from {current_year - 1} and {current_year}.
+    - Do not generate outdated questions based solely on your internal training data.
     - Ground facts using the latest internet data.
     - Output strictly as a JSON array of objects matching this schema:
     [
@@ -128,9 +138,9 @@ def generator_node(state: AdaptiveTestState) -> dict:
         "correct_answer": "A",
         "explanation": "Detailed explanation...",
         "metadata": {{
-            "exam": "UPSC", "subject": "Economy", "topic": "Monetary Policy", 
-            "sub_topic": "Repo Rate", "cognitive_skill": "Analytical", 
-            "difficulty_level": 4, "ttl_days": 180
+            "exam": "{state['profile'].target_exam}", "subject": "{state['config'].target_subject}", "topic": "{topic}", 
+            "sub_topic": "Specific Sub-Topic Here", "cognitive_skill": "Analytical", 
+            "difficulty_level": {state['config'].target_difficulty}, "ttl_days": 180
         }}
       }}
     ]
@@ -152,11 +162,10 @@ def generator_node(state: AdaptiveTestState) -> dict:
         return {
             "draft_batch": new_batch, 
             "generation_attempts": state.get("generation_attempts", 0) + 1,
-            "rejected_batch": [] # Clear old rejections
+            "rejected_batch": [] 
         }
     except Exception as e:
         print(f"❌ Generator format error: {e}")
-        # Force a retry on the whole batch if JSON parsing fails entirely
         return {"generation_attempts": state.get("generation_attempts", 0) + 1}
 
 def critic_node(state: AdaptiveTestState) -> dict:
@@ -173,7 +182,6 @@ def critic_node(state: AdaptiveTestState) -> dict:
     rejected = []
     
     for draft in drafts:
-        # Mock Evaluation Logic
         if "obvious" in draft.text.lower(): 
             rejected.append({"id": draft.id, "feedback": "Distractors are too obvious."})
         else:

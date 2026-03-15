@@ -8,7 +8,8 @@ COPY requirements.txt ${LAMBDA_TASK_ROOT}
 RUN pip install -r requirements.txt
 
 # Copy all your Python files into the container
-COPY schema.py vector_store.py graph.py app.py ${LAMBDA_TASK_ROOT}/
+# COPY schema.py vector_store.py graph.py app.py ${LAMBDA_TASK_ROOT}/
+COPY *.py ${LAMBDA_TASK_ROOT}/
 
 # Set the entrypoint to the lambda_handler function inside app.py
 CMD [ "app.lambda_handler" ]
