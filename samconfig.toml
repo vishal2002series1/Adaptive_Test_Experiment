@@ -1,0 +1,13 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "adaptive-test-engine"
+resolve_s3 = true
+s3_prefix = "adaptive-test-engine"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = ["TestGeneratorFunction=258574424891.dkr.ecr.us-east-1.amazonaws.com/adaptivetestengine26e0d927/testgeneratorfunction78756693repo"]
+
+[default.global.parameters]
+region = "us-east-1"

@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Adaptive UPSC Test Generation API using LangGraph and Gemini
+
+Resources:
+  # 1. DynamoDB Table for Long-Term Student Memory
+  StudentProfileTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: UPSC_Student_Profiles
+      AttributeDefinitions:
+        - AttributeName: student_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: student_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # 2. The LangGraph Multi-Agent Lambda Function
+  TestGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:       # for faster 
+        - arm64
+      MemorySize: 2048       # 1GB memory for LangGraph and GenAI SDK
+      Timeout: 900           # 15 minute timeout (max for Lambda) for API calls
+      Environment:
+        Variables:
+          STUDENT_TABLE: !Ref StudentProfileTable
+          GEMINI_API_KEY: "placeholder-key"
+          # Note: In production, API keys should go in AWS Secrets Manager. 
+          # For testing, you can pass it during the sam deploy step or hardcode it here (not recommended for prod).
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StudentProfileTable
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+      # Events:
+      #   GenerateTestAPI:
+      #     Type: Api
+      #     Properties:
+      #       Path: /generate-test
+      #       Method: post
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: python3.11-v1
+
+Outputs:
+  GenerateTestFunctionUrl:
+    Description: "Direct Lambda Function URL for POST requests (15-min timeout)"
+    Value: !GetAtt TestGeneratorFunctionUrl.FunctionUrl
+
+# Outputs:
+#   GenerateTestApiEndpoint:
+#     Description: "API Gateway endpoint URL for POST requests"
+#     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/generate-test/"
