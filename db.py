@@ -17,7 +17,8 @@ def get_student_profile(student_id: str, target_exam: str) -> StudentProfile:
             'target_exam': target_exam  
         })
         if 'Item' in response:
-            # DynamoDB returns Decimals, which Pydantic will happily cast back to floats!
+            # DynamoDB returns Decimals, which Pydantic happily casts back to floats.
+            # If 'explored_topics' is missing from old DB records, Pydantic's default_factory handles it automatically.
             return StudentProfile(**response['Item'])
     except Exception as e:
         print(f"⚠️ Warning: Could not fetch from DynamoDB ({e}). Using default profile.")
@@ -29,9 +30,9 @@ def save_student_profile(profile: StudentProfile) -> bool:
     try:
         item = profile.model_dump()
         
-        # --- NEW: Boto3 Float to Decimal Converter ---
+        # --- Boto3 Float to Decimal Converter ---
         # Convert the dict to a JSON string, then parse it back into a dict 
-        # while forcing all floating-point numbers to become Decimals.
+        # while forcing all floating-point numbers to become Decimals for DynamoDB.
         dynamo_item = json.loads(json.dumps(item), parse_float=Decimal)
         
         table.put_item(Item=dynamo_item)

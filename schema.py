@@ -30,15 +30,19 @@ class StudentProfile(BaseModel):
     target_exam: str
     tests_taken: int = 0
     overall_readiness_score: float = 0.0
+    
+    # NEW: Tracks the unique topics the student has encountered
+    explored_topics: List[str] = Field(default_factory=list) 
+    
     topic_proficiencies: Dict[str, float] = {}
     seen_question_counts: Dict[str, int] = {}
 
 class TestConfig(BaseModel):
     target_subject: str = "All Syllabus"
-    target_topic: str = "All Syllabus"  # <-- Added: Specific topic for manual override
+    target_topic: str = "All Syllabus" 
     target_difficulty: int = 3
     num_questions: int = 50
-    adaptive_mode: bool = True          # <-- Added: The Override Switch
+    adaptive_mode: bool = True          
 
 # ==========================================
 # 2. GENERATION STATE (Test Building Workflow)
@@ -58,6 +62,10 @@ class AdaptiveTestState(TypedDict):
     draft_batch: List[Question]
     rejected_batch: List[Dict[str, str]] 
     current_batch_target: int
+    
+    # NEW: To communicate the 80/20 split between orchestrator and generator
+    exploitation_topic: str
+    exploration_topic: str 
     
 # ==========================================
 # 3. EVALUATION STATE (Post-Test Workflow)
