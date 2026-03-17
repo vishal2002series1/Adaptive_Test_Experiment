@@ -227,6 +227,13 @@ def generator_node(state: AdaptiveTestState) -> dict:
     
     {feedback_context}
     
+    LATEX FORMATTING RULES (CRITICAL):
+    1. You MUST use strictly raw LaTeX wrapped in $ for inline and $$ for block equations.
+    2. NEVER use the word "\\backslash". Use the actual backslash character (e.g., \\frac, \\pi, \\sqrt).
+    3. NEVER write out "^\\wedge". Use the standard caret symbol (e.g., x^2).
+    4. Example Good: $\\frac{{\\pi^2}}{{4}}$
+    5. Example Bad: $\\backslash frac{{\\backslash pi^{{\\wedge}}2}}{{4}}$
+    
     REQUIREMENTS:
     - CRITICAL: You are equipped with a Google Search tool. You MUST use it to prioritize current affairs, newly passed legislations, recent supreme court judgments, and scientific developments from {current_year - 1} and {current_year}.
     - Do not generate outdated questions based solely on your internal training data.

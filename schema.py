@@ -19,10 +19,10 @@ class QuestionMetadata(BaseModel):
 
 class Question(BaseModel):
     id: str
-    text: str = Field(description="The question text. Uses LaTeX delimiters for math/science.")
-    options: Dict[str, str] = Field(description="e.g., {'A': 'Statement 1', 'B': 'Statement 2'}")
+    text: str = Field(description="The question text. MUST use $ for inline math (e.g. $V$) and $$ for block math.")
+    options: Dict[str, str] = Field(description="e.g., {'A': '...', 'B': '...'}. MUST use $ for math.")
     correct_answer: str
-    explanation: str
+    explanation: str = Field(description="Detailed explanation. MUST use $ for inline math and $$ for block math.")
     metadata: QuestionMetadata
 
 class StudentProfile(BaseModel):
