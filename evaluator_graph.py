@@ -14,7 +14,7 @@ api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
 # ==========================================
-# HISTORY TRACKER (Temporary Storage to prevent Lambda crash)
+# HISTORY TRACKER (Temporary Storage)
 # ==========================================
 def save_test_history_locally(profile_id, exam, score, graded_results, study_plan):
     """Saves the test results to Lambda's /tmp directory to prevent read-only crashes."""
@@ -115,7 +115,7 @@ def profiler_node(state: EvaluationState) -> dict:
     }
 
 def strategist_node(state: EvaluationState) -> dict:
-    """Generates a highly professional, structured academic remediation plan."""
+    """Generates a structured plan and saves it to permanent memory."""
     print("🧠 Strategist: Generating Professional Academic Strategy...")
     
     graded_results = state.get("graded_results", [])
@@ -126,8 +126,10 @@ def strategist_node(state: EvaluationState) -> dict:
     
     if not mistakes:
         study_plan = "### Diagnostic Summary\nExcellent performance. 100% accuracy achieved. Proceed to the next module to continue advancing your overall readiness."
+        profile.last_study_plan = study_plan
+        save_student_profile(profile)
         save_test_history_locally(profile.student_id, profile.target_exam, score_percentage, graded_results, study_plan)
-        return {"study_plan": study_plan}
+        return {"study_plan": study_plan, "profile": profile}
         
     mistakes_context = ""
     for m in mistakes:
@@ -149,42 +151,35 @@ def strategist_node(state: EvaluationState) -> dict:
     
     CRITICAL CONSTRAINTS:
     1. TONE: Strictly academic, objective, and professional. 
-    2. PROHIBITED: Do NOT use emojis. Do NOT use conversational filler (e.g., "Hello!", "Let's dive in!"). Do NOT generate any URLs, web links, or YouTube search queries.
-    3. FOCUS: Rely on standard academic concepts and standard reference materials (e.g., NCERT, standard textbooks).
+    2. PROHIBITED: Do NOT use emojis. Do NOT use conversational filler. Do NOT generate URLs.
+    3. FOCUS: Rely on standard academic concepts and standard reference materials.
     
     STRUCTURE YOUR RESPONSE EXACTLY AS FOLLOWS (using Markdown headers):
-
     ### 1. Diagnostic Summary
-    Provide a brief, objective assessment of their current readiness and specifically name the core areas where they exhibited conceptual gaps in this test.
-
     ### 2. Conceptual Remediation
-    For each major topic failed:
-    * Detail exactly **What** they misunderstood based on the facts provided.
-    * Explain **Why** the correct framework or formula matters.
-
     ### 3. Study Directives
-    Provide 3-4 highly specific, actionable steps on **How** to prepare. Give directives such as "Review the standard textbook chapter on [Topic]", "Practice numericals focusing on [Concept]", or "Memorize the exceptions to [Rule]".
-
     ### 4. Next Assessment Targets
-    Explicitly list the specific topics that will be heavily targeted in their next adaptive assessment based on these failures, so the student knows exactly what to prepare for.
     """
     
     try:
         response = client.models.generate_content(
             model='gemini-3.1-pro-preview',
             contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.2, # Very low temperature for strict, analytical tone
-            )
+            config=types.GenerateContentConfig(temperature=0.2)
         )
         study_plan = response.text
     except Exception as e:
         print(f"❌ Strategist error: {e}")
-        study_plan = "Study plan generation temporarily unavailable. Please review the specific answer explanations below."
+        study_plan = "Study plan generation temporarily unavailable."
+
+    # --- PERMANENT MEMORY INJECTION ---
+    print("💾 Strategist: Saving Study Plan to DynamoDB Memory...")
+    profile.last_study_plan = study_plan
+    save_student_profile(profile) # Commits to the new field we added in schema.py!
 
     save_test_history_locally(profile.student_id, profile.target_exam, score_percentage, graded_results, study_plan)
 
-    return {"study_plan": study_plan}
+    return {"study_plan": study_plan, "profile": profile}
 
 # ==========================================
 # BUILD THE EVALUATOR LANGGRAPH

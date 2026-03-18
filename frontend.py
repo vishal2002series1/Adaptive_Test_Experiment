@@ -1,6 +1,14 @@
 import streamlit as st
 import requests
 import json
+import threading
+import time
+
+# Safely import Streamlit's context manager for background threading
+try:
+    from streamlit.runtime.scriptrunner import add_script_run_ctx
+except ImportError:
+    add_script_run_ctx = None
 
 # --- CONFIGURATION ---
 API_URL = "https://2e7o2dai4vbtqzvs7x7qtcwuni0cqrim.lambda-url.us-east-1.on.aws/"
@@ -19,6 +27,22 @@ def format_latex(text):
     text = text.replace(r'\wedge', '^')
     text = text.replace(r'\{', '{').replace(r'\}', '}')
     return text
+
+# --- DYNAMIC LOADER THREAD ---
+def update_loading_text(placeholder, stop_event):
+    """Cycles through dynamic agent statuses."""
+    messages = [
+        "⏳ Planner Agent is analyzing your historical weaknesses...",
+        "🔍 Librarian Agent is checking OpenSearch for existing matches...",
+        "✍️ Generator Agent is drafting highly calibrated questions...",
+        "🧐 Critic Agent is running quality assurance and formatting checks...",
+        "🔄 Agents are refining the question batch..."
+    ]
+    i = 0
+    while not stop_event.is_set():
+        placeholder.info(messages[i % len(messages)])
+        time.sleep(2.5)
+        i += 1
 
 # --- STATE MANAGEMENT ---
 if 'phase' not in st.session_state:
@@ -75,7 +99,6 @@ if st.session_state.phase == 'setup':
     else:
         st.success("Adaptive Mode: The AI will target your weak areas across the ENTIRE exam.")
         
-        # --- OPTION B: Optional Subject Filter ---
         use_specific_subject = st.checkbox("I want to target a specific subject (Optional)")
         if use_specific_subject:
             target_subject = st.text_input("Broad Target Subject", value="Quantitative Aptitude", help="Tell the AI to strictly focus on this specific subject within the exam.")
@@ -129,37 +152,50 @@ if st.session_state.phase == 'setup':
 
     st.divider()
     if st.button("Generate Test 🚀", use_container_width=True, type="primary"):
-        with st.spinner(f"Generating highly calibrated questions for {target_exam}..."):
-            payload = {
-                "action": "generate",
-                "student_profile": {
-                    "student_id": student_id,
-                    "target_exam": target_exam
-                },
-                "test_config": {
-                    "target_subject": target_subject,
-                    "target_topic": target_topic if not adaptive_mode else "Auto-Selected",
-                    "target_difficulty": target_difficulty,
-                    "num_questions": num_questions,
-                    "adaptive_mode": adaptive_mode,
-                    "override_topics": selected_override_topics if adaptive_mode else None 
-                }
-            }
+        status_placeholder = st.empty()
+        stop_event = threading.Event()
+        
+        if add_script_run_ctx:
+            t = threading.Thread(target=update_loading_text, args=(status_placeholder, stop_event))
+            add_script_run_ctx(t)
+            t.start()
+        else:
+            status_placeholder.info("⏳ AI Agents are collaborating to build your test...")
             
-            try:
-                response = requests.post(API_URL, json=payload, timeout=900)
-                if response.status_code == 200:
-                    data = response.json()
-                    st.session_state.questions = data.get("questions", [])
-                    st.session_state.student_profile = payload["student_profile"]
-                    st.session_state.user_answers = {} 
-                    st.session_state.phase = 'testing'
-                    st.rerun()
-                else:
-                    # If the AI Gatekeeper rejects the subject, it will show up here in red!
-                    st.error(f"Test Generation Failed: {response.json().get('error', response.text)}")
-            except Exception as e:
-                st.error(f"Connection Error: {e}")
+        payload = {
+            "action": "generate",
+            "student_profile": {
+                "student_id": student_id,
+                "target_exam": target_exam
+            },
+            "test_config": {
+                "target_subject": target_subject,
+                "target_topic": target_topic if not adaptive_mode else "Auto-Selected",
+                "target_difficulty": target_difficulty,
+                "num_questions": num_questions,
+                "adaptive_mode": adaptive_mode,
+                "override_topics": selected_override_topics if adaptive_mode else None 
+            }
+        }
+        
+        try:
+            response = requests.post(API_URL, json=payload, timeout=900)
+            stop_event.set()
+            status_placeholder.empty()
+            
+            if response.status_code == 200:
+                data = response.json()
+                st.session_state.questions = data.get("questions", [])
+                st.session_state.student_profile = payload["student_profile"]
+                st.session_state.user_answers = {} 
+                st.session_state.phase = 'testing'
+                st.rerun()
+            else:
+                st.error(f"Test Generation Failed: {response.json().get('error', response.text)}")
+        except Exception as e:
+            stop_event.set()
+            status_placeholder.empty()
+            st.error(f"Connection Error: {e}")
 
 # ==========================================
 # PHASE 2: TEST TAKING
@@ -169,18 +205,28 @@ elif st.session_state.phase == 'testing':
     st.write("Please answer the following questions.")
     st.divider()
     
+    # Track which shared contexts we've already displayed to avoid repetition
+    rendered_contexts = set()
+    
     for i, q in enumerate(st.session_state.questions):
-        st.markdown(f"**Q{i+1}.** {format_latex(q['text'])}")
+        context = q.get('shared_context')
         
+        # If the question belongs to a shared block, print the context once
+        if context and context not in rendered_contexts:
+            st.markdown("### 📖 Shared Context Passage")
+            st.info(format_latex(context))
+            rendered_contexts.add(context)
+            
+        st.markdown(f"**Q{i+1}.** {format_latex(q['text'])}")
         options_list = [f"{key}: {format_latex(val)}" for key, val in q['options'].items()]
         
         choice = st.radio(
             f"Select answer for Q{i+1}:", 
             options_list, 
-            key=f"radio_{q['id']}",
-            index=None 
+            key=f"radio_{q['id']}", 
+            index=None, 
+            label_visibility="collapsed"
         )
-        
         if choice:
             st.session_state.user_answers[q['id']] = choice.split(":")[0]
             
@@ -227,15 +273,21 @@ elif st.session_state.phase == 'results':
         q_id = result["question_id"]
         original_q = next((q for q in st.session_state.questions if q["id"] == q_id), None)
         
-        with st.expander(f"Question: {format_latex(original_q['text'][:60])}..."):
-            st.markdown(f"**Full Question:** {format_latex(original_q['text'])}")
+        # `text` now solely contains the specific question prompt
+        display_text = original_q.get('text', 'Unknown') if original_q else "Unknown"
+        
+        with st.expander(f"Question: {format_latex(display_text[:60])}..."):
+            # Provide a hint if this belonged to a larger context block
+            if original_q and original_q.get('shared_context'):
+                st.caption("*(This question was part of a Shared Context Passage)*")
+                
+            st.markdown(f"**Question:** {format_latex(display_text)}")
             if result["is_correct"]:
                 st.success(f"✅ Your Answer: {result['student_answer']} (Correct)")
             else:
                 st.error(f"❌ Your Answer: {result['student_answer']} | Correct Answer: {result['correct_answer']}")
             
             st.markdown(f"**Explanation:** {format_latex(original_q['explanation'])}")
-            
             st.caption(f"Topic: {result.get('topic', 'N/A')} | Score Delta: {result.get('score_delta', 'N/A')}")
 
     st.divider()

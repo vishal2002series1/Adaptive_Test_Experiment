@@ -15,10 +15,14 @@ class QuestionMetadata(BaseModel):
     cognitive_skill: str = Field(description="e.g., Factual Recall, Analytical Reasoning")
     difficulty_level: int = Field(ge=1, le=5, description="1 (Beginner) to 5 (Exam-Ready)")
     ttl_days: Optional[int] = Field(default=None, description="Time-to-live in days. None for static subjects.")
-    generation_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    # FIX: Changed to an ISO string to prevent AWS Lambda "datetime not JSON serializable" crashes!
+    generation_date: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class Question(BaseModel):
     id: str
+    # FIX: Natively supports Reading Comprehension / Grouped passages!
+    shared_context: Optional[str] = Field(default=None, description="The shared passage or dataset if this question belongs to a group. Otherwise null.")
     text: str = Field(description="The question text. MUST use $ for inline math (e.g. $V$) and $$ for block math.")
     options: Dict[str, str] = Field(description="e.g., {'A': '...', 'B': '...'}. MUST use $ for math.")
     correct_answer: str
@@ -31,11 +35,11 @@ class StudentProfile(BaseModel):
     tests_taken: int = 0
     overall_readiness_score: float = 0.0
     
-    # Tracks the unique topics the student has encountered
     explored_topics: List[str] = Field(default_factory=list) 
-    
     topic_proficiencies: Dict[str, float] = {}
     seen_question_counts: Dict[str, int] = {}
+    
+    last_study_plan: Optional[str] = None
 
 class TestConfig(BaseModel):
     target_subject: str = "All Syllabus"
@@ -43,45 +47,52 @@ class TestConfig(BaseModel):
     target_difficulty: int = 3
     num_questions: int = 50
     adaptive_mode: bool = True
-    # NEW: Allows frontend to pass specific topics the user checked manually
     override_topics: Optional[List[str]] = None          
 
 # ==========================================
-# 2. GENERATION STATE (Test Building Workflow)
+# 2. THE BLUEPRINT (New Planner Architecture)
+# ==========================================
+
+class BlueprintRequirement(BaseModel):
+    topic: str = Field(description="The specific topic to test.")
+    quantity: int = Field(description="Number of questions for this topic.")
+    target_difficulty: int = Field(description="Difficulty level 1-5 based on student history.")
+    question_type: str = Field(default="Standard", description="'Standard', 'Reading Comprehension', 'Data Interpretation', etc.")
+    requires_shared_context: bool = Field(default=False, description="True if these questions must share a single comprehensive passage, dataset, or case-study.")
+    reasoning: str = Field(description="Why the planner chose this specific configuration.")
+
+class TestBlueprint(BaseModel):
+    overall_strategy: str = Field(description="A brief summary of the pedagogical strategy for this test.")
+    requirements: List[BlueprintRequirement]
+
+# ==========================================
+# 3. GENERATION STATE (Test Building Workflow)
 # ==========================================
 
 class AdaptiveTestState(TypedDict):
-    # Context
     profile: StudentProfile
     config: TestConfig
+    blueprint: Optional[TestBlueprint]
     
-    # Execution Tracking
     current_question_index: int
     generation_attempts: int
     
-    # Workspace
     selected_questions: Annotated[List[Question], operator.add]
     draft_batch: List[Question]
     rejected_batch: List[Dict[str, str]] 
     current_batch_target: int
     
-    # 80/20 Split Tracking
     exploitation_topics: List[str]
     exploration_topics: List[str] 
     
 # ==========================================
-# 3. EVALUATION STATE (Post-Test Workflow)
+# 4. EVALUATION STATE (Post-Test Workflow)
 # ==========================================
 
 class EvaluationState(TypedDict):
-    # Context
     profile: StudentProfile
     questions: List[Question]
     student_answers: Dict[str, str]  
-    
-    # Workspace
     graded_results: List[Dict[str, Any]] 
     score_percentage: float
-    
-    # Output
     study_plan: str
