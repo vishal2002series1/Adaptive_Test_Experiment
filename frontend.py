@@ -9,7 +9,6 @@ st.set_page_config(page_title="AI Adaptive Test Engine", layout="centered")
 
 # --- LATEX FORMATTER ---
 def format_latex(text):
-    """Cleans LLM hallucinations and converts delimiters to Streamlit-compatible LaTeX."""
     if not text or not isinstance(text, str): 
         return text
     text = text.replace(r'\(', '$').replace(r'\)', '$')
@@ -32,7 +31,6 @@ if 'evaluation' not in st.session_state:
     st.session_state.evaluation = None
 if 'student_profile' not in st.session_state:
     st.session_state.student_profile = {}
-# NEW: Store fetched profile data for the dashboard
 if 'fetched_profile_data' not in st.session_state:
     st.session_state.fetched_profile_data = None
 
@@ -42,7 +40,6 @@ if 'fetched_profile_data' not in st.session_state:
 if st.session_state.phase == 'setup':
     st.title("📚 AI Adaptive Test Engine")
     
-    # --- 1. Identity & Exam Selection ---
     st.subheader("1. User Profile")
     col1, col2 = st.columns(2)
     with col1:
@@ -56,19 +53,16 @@ if st.session_state.phase == 'setup':
 
     st.divider()
 
-    # --- 2. Testing Mode Selection ---
     st.subheader("2. Testing Mode")
     adaptive_mode = st.toggle("Enable Adaptive Learning Mode", value=True)
     
-    # Variables to hold final configuration
-    target_subject = ""
-    target_topic = ""
+    target_subject = "Entire Syllabus"
+    target_topic = "All Syllabus"
     target_difficulty = 3
     num_questions = 5
     selected_override_topics = []
 
     if not adaptive_mode:
-        # MANUAL MODE UI
         st.info("Manual Mode: Select exactly what you want to study.")
         col3, col4 = st.columns(2)
         with col3:
@@ -79,10 +73,12 @@ if st.session_state.phase == 'setup':
             num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
     
     else:
-        # ADAPTIVE MODE UI ("Glass-Box" Dashboard)
-        st.success("Adaptive Mode: The AI will target your weak areas based on your history.")
+        st.success("Adaptive Mode: The AI will target your weak areas across the ENTIRE exam.")
         
-        target_subject = st.text_input("Broad Target Subject", value="Quantitative Aptitude", help="Tell the AI which broad subject to analyze your history within.")
+        # --- OPTION B: Optional Subject Filter ---
+        use_specific_subject = st.checkbox("I want to target a specific subject (Optional)")
+        if use_specific_subject:
+            target_subject = st.text_input("Broad Target Subject", value="Quantitative Aptitude", help="Tell the AI to strictly focus on this specific subject within the exam.")
         
         col_diff, col_num = st.columns(2)
         with col_diff:
@@ -90,7 +86,6 @@ if st.session_state.phase == 'setup':
         with col_num:
             num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
 
-        # Fetch Profile Button
         if st.button("🔍 Load My Learning Profile", type="secondary"):
             with st.spinner("Fetching historical data..."):
                 payload = {
@@ -106,7 +101,6 @@ if st.session_state.phase == 'setup':
                 except Exception as e:
                     st.error(f"Connection error: {e}")
 
-        # Render Dashboard if data exists
         if st.session_state.fetched_profile_data:
             prof_data = st.session_state.fetched_profile_data
             proficiencies = prof_data.get('topic_proficiencies', {})
@@ -121,22 +115,18 @@ if st.session_state.phase == 'setup':
                 st.markdown("#### Topic Mastery & Next Test Selection")
                 st.write("Review your progress. The AI has pre-selected your 3 weakest topics to focus on next, but you can change them.")
                 
-                # Sort topics by weakness to determine auto-selection
                 sorted_topics = sorted(proficiencies.items(), key=lambda x: x[1])
                 auto_select_topics = [t[0] for t in sorted_topics[:3]]
                 
-                # Render a progress bar and checkbox for every explored topic
                 for topic, score in proficiencies.items():
                     col_chk, col_prog = st.columns([1, 4])
                     with col_chk:
-                        # Auto-check if it's in the bottom 3
                         is_checked = st.checkbox(topic, value=(topic in auto_select_topics))
                         if is_checked:
                             selected_override_topics.append(topic)
                     with col_prog:
                         st.progress(score, text=f"{score:.2f}/1.0")
 
-    # --- 3. Generate Action ---
     st.divider()
     if st.button("Generate Test 🚀", use_container_width=True, type="primary"):
         with st.spinner(f"Generating highly calibrated questions for {target_exam}..."):
@@ -152,7 +142,6 @@ if st.session_state.phase == 'setup':
                     "target_difficulty": target_difficulty,
                     "num_questions": num_questions,
                     "adaptive_mode": adaptive_mode,
-                    # Send the specific topics the user checked in the dashboard
                     "override_topics": selected_override_topics if adaptive_mode else None 
                 }
             }
@@ -167,7 +156,8 @@ if st.session_state.phase == 'setup':
                     st.session_state.phase = 'testing'
                     st.rerun()
                 else:
-                    st.error(f"API Error: {response.text}")
+                    # If the AI Gatekeeper rejects the subject, it will show up here in red!
+                    st.error(f"Test Generation Failed: {response.json().get('error', response.text)}")
             except Exception as e:
                 st.error(f"Connection Error: {e}")
 
@@ -254,5 +244,5 @@ elif st.session_state.phase == 'results':
         st.session_state.questions = []
         st.session_state.user_answers = {}
         st.session_state.evaluation = None
-        st.session_state.fetched_profile_data = None # Clear dashboard data for next run
+        st.session_state.fetched_profile_data = None 
         st.rerun()

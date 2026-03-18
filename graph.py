@@ -27,6 +27,26 @@ def orchestrator_node(state: AdaptiveTestState) -> dict:
     profile = state["profile"]
     config = state["config"]
     
+    # --- AI VALIDATION GATEKEEPER ---
+    # Only validate if the user provided a specific subject (not "Entire Syllabus" or "All Syllabus")
+    if config.target_subject and config.target_subject.lower() not in ["entire syllabus", "all syllabus"]:
+        print(f"🛡️ Gatekeeper: Validating if '{config.target_subject}' belongs to '{profile.target_exam}'...")
+        validation_prompt = f"Does the subject '{config.target_subject}' legitimately belong to the official syllabus of the '{profile.target_exam}'? Reply ONLY with YES or NO. Do not explain."
+        try:
+            validation_response = client.models.generate_content(
+                model='gemini-3.1-pro-preview',
+                contents=validation_prompt,
+                config=types.GenerateContentConfig(temperature=0.0) # Zero creativity for strict factual check
+            )
+            if "no" in validation_response.text.strip().lower():
+                print(f"❌ Gatekeeper Rejected: {config.target_subject} is not in {profile.target_exam}")
+                raise ValueError(f"Subject '{config.target_subject}' is not a valid component of the '{profile.target_exam}'. Please correct your test configuration.")
+            print("✅ Gatekeeper Approved.")
+        except ValueError as ve:
+            raise ve # Re-raise to abort the LangGraph execution immediately
+        except Exception as e:
+            print(f"⚠️ Gatekeeper validation failed to execute: {e}. Proceeding cautiously.")
+
     exploitation_topics = state.get("exploitation_topics", [])
     exploration_topics = state.get("exploration_topics", [])
     
@@ -44,11 +64,17 @@ def orchestrator_node(state: AdaptiveTestState) -> dict:
         # 2. EXPLORATION (20%): Discover Multiple Uncharted Territories
         known_topics_str = ", ".join(profile.explored_topics) if profile.explored_topics else "None"
         
+        # Adjust prompt context based on whether we are exploring the whole exam or a specific subject
+        if config.target_subject.lower() in ["entire syllabus", "all syllabus"]:
+            syllabus_context = f"Analyze the full {profile.target_exam} syllabus."
+        else:
+            syllabus_context = f"Analyze the {profile.target_exam} syllabus specifically for the subject: {config.target_subject}."
+        
         exploration_prompt = f"""
-        Analyze the {profile.target_exam} syllabus for the subject: {config.target_subject}.
+        {syllabus_context}
         The student has already been tested on these topics: [{known_topics_str}].
         
-        Identify 1 to 3 major topics or sub-topics from the {config.target_subject} syllabus that the student has NOT been tested on yet.
+        Identify 1 to 3 major topics or sub-topics that the student has NOT been tested on yet.
         If the syllabus is nearly exhausted, it is okay to return just 1 or 2 topics.
         Respond ONLY with a comma-separated list of the topic names. Do not include any other text, reasoning, or punctuation.
         """
@@ -202,7 +228,6 @@ def generator_node(state: AdaptiveTestState) -> dict:
     exploitation_topics = state.get("exploitation_topics", [state["config"].target_topic])
     exploration_topics = state.get("exploration_topics", [])
     
-    # Calculate how many questions go to the weak area (80%) and the new area (20%)
     num_explore = 0
     num_exploit = num_to_generate
     
@@ -210,26 +235,17 @@ def generator_node(state: AdaptiveTestState) -> dict:
         num_explore = math.ceil(num_to_generate * 0.20) 
         num_exploit = num_to_generate - num_explore
 
-    # --- TRUE ROUND-ROBIN DISTRIBUTION ---
-    # We figure out exactly which topics this specific batch should generate questions for.
-    # This prevents the LLM from just picking the first topic in the list every time.
     batch_exploit_topics = []
     for i in range(num_exploit):
-        # We use the current_question_index (or something similar) to stagger it, 
-        # but the simplest way is just to take a slice of the topics that fits the quota.
-        # Since we are generating max 5 at a time, we will just pick topics sequentially.
         batch_exploit_topics.append(exploitation_topics[i % len(exploitation_topics)])
         
     batch_explore_topics = []
     if num_explore > 0 and exploration_topics:
-        # If we need 1 explore question, grab a topic. We will use the number of existing questions 
-        # to decide which index to pick, ensuring we cycle through the explore topics across multiple batches.
         existing_count = len(state.get("selected_questions", []))
         topic_index = existing_count % len(exploration_topics)
         for i in range(num_explore):
              batch_explore_topics.append(exploration_topics[(topic_index + i) % len(exploration_topics)])
     
-    # Format the lists into strings for the prompt
     exploit_str = ", ".join(set(batch_exploit_topics))
     explore_str = ", ".join(set(batch_explore_topics)) if batch_explore_topics else ""
     
@@ -316,7 +332,6 @@ def generator_node(state: AdaptiveTestState) -> dict:
         raw_json_array = json.loads(response.text)
         new_batch = []
         for q_dict in raw_json_array:
-            # --- THE FIX: Ensure globally unique IDs to prevent Streamlit crashes ---
             base_id = q_dict.get("id", "q")
             unique_hash = uuid.uuid4().hex[:8]
             q_dict["id"] = f"{base_id}_{unique_hash}"
