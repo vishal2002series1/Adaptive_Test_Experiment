@@ -50,21 +50,26 @@ if st.session_state.phase == 'setup':
     with col1:
         student_id = st.text_input("Student ID", value="Physics Student V2")
     with col2:
-        target_exam = st.selectbox("Target Exam", ["JEE MAINS", "UPSC", "AWS SOLUTIONS ARCHITECT", "SSC CGL"])
+        # UPDATED: Dynamic Exam Selection
+        exam_preset = st.selectbox("Target Exam", ["JEE MAINS", "UPSC", "AWS SOLUTIONS ARCHITECT", "SSC CGL", "Custom Exam..."])
+        if exam_preset == "Custom Exam...":
+            target_exam = st.text_input("Enter Custom Exam Name", value="CAT Exam")
+        else:
+            target_exam = exam_preset
         
     st.subheader("2. Test Configuration")
     adaptive_mode = st.toggle("Enable Adaptive Mode (Targets Weaknesses)", value=True)
     
     col3, col4 = st.columns(2)
     with col3:
-        target_subject = st.text_input("Target Subject", value="Physics")
-        target_topic = st.text_input("Target Topic", value="Kinematics")
+        target_subject = st.text_input("Target Subject", value="Quantitative Aptitude")
+        target_topic = st.text_input("Target Topic", value="Arithmetic")
     with col4:
         target_difficulty = st.slider("Difficulty Level", 1, 5, 3)
         num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
 
     if st.button("Generate Test 🚀", use_container_width=True):
-        with st.spinner("Generating highly calibrated questions via LangGraph..."):
+        with st.spinner(f"Generating highly calibrated questions for {target_exam}..."):
             payload = {
                 "action": "generate",
                 "student_profile": {

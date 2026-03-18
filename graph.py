@@ -1,6 +1,7 @@
 import os
 import json
 import math
+import uuid
 from typing import Literal
 from dotenv import load_dotenv
 from google import genai
@@ -26,62 +27,67 @@ def orchestrator_node(state: AdaptiveTestState) -> dict:
     profile = state["profile"]
     config = state["config"]
     
-    exploitation_topic = state.get("exploitation_topic", "")
-    exploration_topic = state.get("exploration_topic", "")
+    exploitation_topics = state.get("exploitation_topics", [])
+    exploration_topics = state.get("exploration_topics", [])
     
-    # Run the adaptive discovery logic only on the very first pass
-    if config.adaptive_mode and not exploitation_topic:
+    if config.adaptive_mode and not exploitation_topics:
         
-        # 1. EXPLOITATION (80%): Find the weakest known topic
+        # 1. EXPLOITATION (80%): Find up to 3 weakest known topics
         if profile.topic_proficiencies:
-            exploitation_topic = min(profile.topic_proficiencies, key=profile.topic_proficiencies.get)
-            print(f"🧠 Orchestrator [EXPLOIT]: Weakest known area -> {exploitation_topic}")
+            sorted_topics = sorted(profile.topic_proficiencies.items(), key=lambda item: item[1])
+            exploitation_topics = [t[0] for t in sorted_topics[:3]]
+            print(f"🧠 Orchestrator [EXPLOIT]: Weakest areas targeted -> {exploitation_topics}")
         else:
-            # Cold start: They have no profile yet. Use the requested subject as a broad starting point.
-            exploitation_topic = config.target_subject
-            print(f"🧠 Orchestrator [COLD START]: No profile found. Starting with broad subject -> {exploitation_topic}")
+            exploitation_topics = [config.target_subject]
+            print(f"🧠 Orchestrator [COLD START]: No profile found. Starting with broad subject -> {exploitation_topics[0]}")
 
-        # 2. EXPLORATION (20%): Discover uncharted territory
+        # 2. EXPLORATION (20%): Discover Multiple Uncharted Territories
         known_topics_str = ", ".join(profile.explored_topics) if profile.explored_topics else "None"
         
         exploration_prompt = f"""
         Analyze the {profile.target_exam} syllabus for the subject: {config.target_subject}.
         The student has already been tested on these topics: [{known_topics_str}].
         
-        Identify exactly ONE major topic or sub-topic from the {config.target_subject} syllabus that the student has NOT been tested on yet.
-        Respond ONLY with the name of the topic. Do not include any other text, reasoning, or punctuation.
+        Identify 1 to 3 major topics or sub-topics from the {config.target_subject} syllabus that the student has NOT been tested on yet.
+        If the syllabus is nearly exhausted, it is okay to return just 1 or 2 topics.
+        Respond ONLY with a comma-separated list of the topic names. Do not include any other text, reasoning, or punctuation.
         """
         
         try:
-            print("🔭 Orchestrator: Asking Gemini to chart new territory...")
+            print("🔭 Orchestrator: Asking Gemini to chart new territories...")
             response = client.models.generate_content(
                 model='gemini-3.1-pro-preview',
                 contents=exploration_prompt,
-                config=types.GenerateContentConfig(temperature=0.7) # Higher temp for diverse discovery
+                config=types.GenerateContentConfig(temperature=0.7) 
             )
-            raw_new_topic = response.text.strip()
+            raw_new_topics = [t.strip() for t in response.text.split(",") if t.strip()]
             
-            # 3. SEMANTIC SNAPPING: Ensure it's not a duplicate
-            exploration_topic = semantic_snap_topic(
-                new_topic=raw_new_topic, 
-                existing_topics=profile.explored_topics
-            )
+            # 3. SEMANTIC SNAPPING (Looping through multiple topics)
+            valid_exploration_topics = []
+            for raw_topic in raw_new_topics:
+                snapped_topic = semantic_snap_topic(
+                    new_topic=raw_topic, 
+                    existing_topics=profile.explored_topics
+                )
+                
+                # 4. PROFILE INJECTION
+                if snapped_topic not in profile.explored_topics:
+                    profile.explored_topics.append(snapped_topic)
+                    profile.topic_proficiencies[snapped_topic] = 0.5 
+                    valid_exploration_topics.append(snapped_topic)
+                    print(f"✨ Orchestrator: Injected new topic '{snapped_topic}' into profile with baseline 0.5")
             
-            # 4. PROFILE INJECTION: Add it to the profile with a baseline score if it's genuinely new
-            if exploration_topic not in profile.explored_topics:
-                profile.explored_topics.append(exploration_topic)
-                profile.topic_proficiencies[exploration_topic] = 0.5 # Average Baseline
-                print(f"✨ Orchestrator: Injected new topic '{exploration_topic}' into profile with baseline 0.5")
+            exploration_topics = valid_exploration_topics
+            if exploration_topics:
                 save_student_profile(profile)
+            else:
+                print("⚠️ Orchestrator: No genuinely new topics found (Syllabus exhausted?). Skipping exploration.")
 
         except Exception as e:
             print(f"⚠️ Orchestrator Exploration failed: {e}. Defaulting entirely to exploitation.")
-            exploration_topic = exploitation_topic # Fallback to 100% exploitation
 
-    # Fallback for manual mode
-    if not exploitation_topic:
-        exploitation_topic = config.target_topic
-        print(f"🎯 Orchestrator [MANUAL]: Targeting -> {exploitation_topic}")
+    if not exploitation_topics:
+        exploitation_topics = [config.target_topic]
 
     current_count = len(state.get("selected_questions", []))
     target_count = config.num_questions
@@ -100,8 +106,8 @@ def orchestrator_node(state: AdaptiveTestState) -> dict:
         "draft_batch": [],
         "rejected_batch": [],
         "config": config,
-        "exploitation_topic": exploitation_topic,
-        "exploration_topic": exploration_topic,
+        "exploitation_topics": exploitation_topics,
+        "exploration_topics": exploration_topics,
         "profile": profile 
     }
 
@@ -116,51 +122,64 @@ def database_retriever_node(state: AdaptiveTestState) -> dict:
     existing_ids = [existing.id for existing in state.get("selected_questions", [])]
     seen_history = list(state["profile"].seen_question_counts.keys())
     
-    exploitation_topic = state.get("exploitation_topic", state["config"].target_topic)
-    exploration_topic = state.get("exploration_topic", "")
+    exploitation_topics = state.get("exploitation_topics", [state["config"].target_topic])
+    exploration_topics = state.get("exploration_topics", [])
     
-    # Calculate the 80/20 split for retrieval
     num_explore = 0
     num_exploit = target
     
-    if exploration_topic and exploration_topic != exploitation_topic and target >= 2:
+    if exploration_topics and target >= 2:
         num_explore = math.ceil(target * 0.20)
         num_exploit = target - num_explore
         
-    # --- Search 1: Exploitation Topic (80%) ---
-    print(f"   -> Looking for {num_exploit} questions on '{exploitation_topic}'")
-    for _ in range(num_exploit):
-        current_exclude_ids = existing_ids + seen_history + [fq.id for fq in found_questions]
-        q = retrieve_best_question(
-            target_exam=state["profile"].target_exam,
-            target_subject=state["config"].target_subject,
-            target_topic=exploitation_topic,  
-            target_difficulty=state["config"].target_difficulty,
-            student_profile=state["profile"],
-            exclude_ids=current_exclude_ids
-        )
-        if q:
-            found_questions.append(q)
-        else:
-            break # DB doesn't have enough, Generator will fill the gap
+    # --- Search 1: Exploitation Topics (80% Distributed) ---
+    exploit_allocations = {t: 0 for t in exploitation_topics}
+    for i in range(num_exploit):
+        topic = exploitation_topics[i % len(exploitation_topics)]
+        exploit_allocations[topic] += 1
+
+    for topic, count in exploit_allocations.items():
+        if count > 0:
+            print(f"   -> Looking for {count} questions on '{topic}'")
+            for _ in range(count):
+                current_exclude_ids = existing_ids + seen_history + [fq.id for fq in found_questions]
+                q = retrieve_best_question(
+                    target_exam=state["profile"].target_exam,
+                    target_subject=state["config"].target_subject,
+                    target_topic=topic,  
+                    target_difficulty=state["config"].target_difficulty,
+                    student_profile=state["profile"],
+                    exclude_ids=current_exclude_ids
+                )
+                if q:
+                    found_questions.append(q)
+                else:
+                    break 
             
-    # --- Search 2: Exploration Topic (20%) ---
-    if num_explore > 0:
-        print(f"   -> Looking for {num_explore} questions on '{exploration_topic}'")
-        for _ in range(num_explore):
-            current_exclude_ids = existing_ids + seen_history + [fq.id for fq in found_questions]
-            q = retrieve_best_question(
-                target_exam=state["profile"].target_exam,
-                target_subject=state["config"].target_subject,
-                target_topic=exploration_topic,  
-                target_difficulty=state["config"].target_difficulty,
-                student_profile=state["profile"],
-                exclude_ids=current_exclude_ids
-            )
-            if q:
-                found_questions.append(q)
-            else:
-                break # DB doesn't have enough, Generator will fill the gap
+    # --- Search 2: Exploration Topics (20% Distributed) ---
+    if num_explore > 0 and exploration_topics:
+        explore_allocations = {t: 0 for t in exploration_topics}
+        for i in range(num_explore):
+            topic = exploration_topics[i % len(exploration_topics)]
+            explore_allocations[topic] += 1
+            
+        for topic, count in explore_allocations.items():
+            if count > 0:
+                print(f"   -> Looking for {count} questions on '{topic}'")
+                for _ in range(count):
+                    current_exclude_ids = existing_ids + seen_history + [fq.id for fq in found_questions]
+                    q = retrieve_best_question(
+                        target_exam=state["profile"].target_exam,
+                        target_subject=state["config"].target_subject,
+                        target_topic=topic,  
+                        target_difficulty=state["config"].target_difficulty,
+                        student_profile=state["profile"],
+                        exclude_ids=current_exclude_ids
+                    )
+                    if q:
+                        found_questions.append(q)
+                    else:
+                        break 
             
     print(f"✅ Retriever: Found {len(found_questions)} suitable questions in DB.")
     
@@ -180,33 +199,60 @@ def generator_node(state: AdaptiveTestState) -> dict:
          return {"draft_batch": []}
          
     # --- The 80/20 Generation Logic ---
-    exploitation_topic = state.get("exploitation_topic", state["config"].target_topic)
-    exploration_topic = state.get("exploration_topic", "")
+    exploitation_topics = state.get("exploitation_topics", [state["config"].target_topic])
+    exploration_topics = state.get("exploration_topics", [])
     
     # Calculate how many questions go to the weak area (80%) and the new area (20%)
-    if exploration_topic and exploration_topic != exploitation_topic and num_to_generate >= 2:
-        num_explore = math.ceil(num_to_generate * 0.20) # At least 1 question if target >= 2
+    num_explore = 0
+    num_exploit = num_to_generate
+    
+    if exploration_topics and num_to_generate >= 2:
+        num_explore = math.ceil(num_to_generate * 0.20) 
         num_exploit = num_to_generate - num_explore
+
+    # --- TRUE ROUND-ROBIN DISTRIBUTION ---
+    # We figure out exactly which topics this specific batch should generate questions for.
+    # This prevents the LLM from just picking the first topic in the list every time.
+    batch_exploit_topics = []
+    for i in range(num_exploit):
+        # We use the current_question_index (or something similar) to stagger it, 
+        # but the simplest way is just to take a slice of the topics that fits the quota.
+        # Since we are generating max 5 at a time, we will just pick topics sequentially.
+        batch_exploit_topics.append(exploitation_topics[i % len(exploitation_topics)])
+        
+    batch_explore_topics = []
+    if num_explore > 0 and exploration_topics:
+        # If we need 1 explore question, grab a topic. We will use the number of existing questions 
+        # to decide which index to pick, ensuring we cycle through the explore topics across multiple batches.
+        existing_count = len(state.get("selected_questions", []))
+        topic_index = existing_count % len(exploration_topics)
+        for i in range(num_explore):
+             batch_explore_topics.append(exploration_topics[(topic_index + i) % len(exploration_topics)])
+    
+    # Format the lists into strings for the prompt
+    exploit_str = ", ".join(set(batch_exploit_topics))
+    explore_str = ", ".join(set(batch_explore_topics)) if batch_explore_topics else ""
+    
+    if num_explore > 0:
         composition_instruction = f"""
         You must generate exactly {num_to_generate} questions. 
         Allocate the topics strictly as follows:
-        - {num_exploit} question(s) explicitly covering: {exploitation_topic}
-        - {num_explore} question(s) explicitly covering: {exploration_topic}
+        - {num_exploit} question(s) explicitly covering topics from this list (distribute them evenly): [{exploit_str}]
+        - {num_explore} question(s) explicitly covering topics from this new list (distribute evenly): [{explore_str}]
         """
-        print(f"✍️ Generator: Drafting {num_exploit} on '{exploitation_topic}', {num_explore} on '{exploration_topic}'...")
+        print(f"✍️ Generator: Drafting {num_exploit} across [{exploit_str}], and {num_explore} across [{explore_str}]...")
     else:
-        # If target is 1, or exploration failed, dedicate 100% to the weak area
         composition_instruction = f"""
         You must generate exactly {num_to_generate} questions.
-        All questions must explicitly cover: {exploitation_topic}
+        All questions must explicitly cover topics from this list (distribute them evenly): [{exploit_str}]
         """
-        print(f"✍️ Generator: Drafting {num_to_generate} questions on '{exploitation_topic}'...")
+        print(f"✍️ Generator: Drafting {num_to_generate} questions across [{exploit_str}]...")
 
     existing_questions = state.get("selected_questions", [])
     
     collision_context = ""
     if existing_questions:
-        collision_context = "CRITICAL AVOIDANCE INSTRUCTIONS:\nThe test currently includes the following questions. You MUST NOT generate questions that test the exact same factual concepts, mechanisms, or angles as these. Explore different facets, historical context, or broader impacts within the topic.\n\n"
+        collision_context = "CRITICAL AVOIDANCE INSTRUCTIONS:\nThe test currently includes the following questions. You MUST NOT generate questions that test the exact same factual concepts, mechanisms, or angles as these.\n\n"
         for i, eq in enumerate(existing_questions, 1):
             collision_context += f"Existing Q{i}: {eq.text}\n"
 
@@ -221,7 +267,10 @@ def generator_node(state: AdaptiveTestState) -> dict:
     
     {composition_instruction}
     
-    CURRENT YEAR: {current_year-1} to {current_year}
+    CURRENT AFFAIRS PROTOCOL:
+    1. Assess the target subject: "{state['config'].target_subject}".
+    2. DYNAMIC SUBJECTS (e.g., Economy, Environment, Current Events, Polity): You MUST use the Google Search tool to ground questions in real-world events, newly passed legislations, and recent judgments. Restrict your current affairs timeline strictly to the last 12 months ({current_year-1} to {current_year}).
+    3. STATIC SUBJECTS (e.g., Physics, Mathematics, Core History, Static Geography): DO NOT force artificial current affairs (e.g., "In a 2026 study...") into the questions. Test the core theoretical concepts purely and directly without contemporary framing.
     
     {collision_context}
     
@@ -235,9 +284,6 @@ def generator_node(state: AdaptiveTestState) -> dict:
     5. Example Bad: $\\backslash frac{{\\backslash pi^{{\\wedge}}2}}{{4}}$
     
     REQUIREMENTS:
-    - CRITICAL: You are equipped with a Google Search tool. You MUST use it to prioritize current affairs, newly passed legislations, recent supreme court judgments, and scientific developments from {current_year - 1} and {current_year}.
-    - Do not generate outdated questions based solely on your internal training data.
-    - Ground facts using the latest internet data.
     - Output strictly as a JSON array of objects matching this schema:
     [
       {{
@@ -268,7 +314,15 @@ def generator_node(state: AdaptiveTestState) -> dict:
     
     try:
         raw_json_array = json.loads(response.text)
-        new_batch = [Question(**q) for q in raw_json_array]
+        new_batch = []
+        for q_dict in raw_json_array:
+            # --- THE FIX: Ensure globally unique IDs to prevent Streamlit crashes ---
+            base_id = q_dict.get("id", "q")
+            unique_hash = uuid.uuid4().hex[:8]
+            q_dict["id"] = f"{base_id}_{unique_hash}"
+            
+            new_batch.append(Question(**q_dict))
+            
         return {
             "draft_batch": new_batch, 
             "generation_attempts": state.get("generation_attempts", 0) + 1,
@@ -308,12 +362,10 @@ def critic_node(state: AdaptiveTestState) -> dict:
     }
 
 def saver_node(state: AdaptiveTestState) -> dict:
-    """Saves approved questions to the OpenSearch Vector Database."""
     approved_questions = state.get("selected_questions", [])
     drafts = state.get("draft_batch", [])
     draft_ids = [d.id for d in drafts]
     
-    # Only save NEWly generated questions, not ones retrieved from DB
     new_approved = [q for q in approved_questions if q.id in draft_ids]
     
     if new_approved:

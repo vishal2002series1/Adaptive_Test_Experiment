@@ -48,6 +48,10 @@ class TestConfig(BaseModel):
 # 2. GENERATION STATE (Test Building Workflow)
 # ==========================================
 
+# ==========================================
+# 2. GENERATION STATE (Test Building Workflow)
+# ==========================================
+
 class AdaptiveTestState(TypedDict):
     # Context
     profile: StudentProfile
@@ -63,9 +67,9 @@ class AdaptiveTestState(TypedDict):
     rejected_batch: List[Dict[str, str]] 
     current_batch_target: int
     
-    # NEW: To communicate the 80/20 split between orchestrator and generator
-    exploitation_topic: str
-    exploration_topic: str 
+    # 80/20 Split Tracking
+    exploitation_topics: List[str]
+    exploration_topics: List[str] # <-- UPDATED: Now a list
     
 # ==========================================
 # 3. EVALUATION STATE (Post-Test Workflow)
