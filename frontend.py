@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import json
 
 # --- CONFIGURATION ---
 API_URL = "https://2e7o2dai4vbtqzvs7x7qtcwuni0cqrim.lambda-url.us-east-1.on.aws/"
@@ -11,20 +12,13 @@ def format_latex(text):
     """Cleans LLM hallucinations and converts delimiters to Streamlit-compatible LaTeX."""
     if not text or not isinstance(text, str): 
         return text
-        
-    # 1. Convert standard LLM math brackets to Streamlit $ signs
     text = text.replace(r'\(', '$').replace(r'\)', '$')
     text = text.replace(r'\[', '$$').replace(r'\]', '$$')
-    
-    # 2. Scrub LLM escaping hallucinations
     text = text.replace(r'\backslash ', '\\')
     text = text.replace(r'\backslash', '\\')
     text = text.replace(r'^{\wedge}', '^')
     text = text.replace(r'\wedge', '^')
-    
-    # Fix broken fractions
     text = text.replace(r'\{', '{').replace(r'\}', '}')
-    
     return text
 
 # --- STATE MANAGEMENT ---
@@ -38,37 +32,113 @@ if 'evaluation' not in st.session_state:
     st.session_state.evaluation = None
 if 'student_profile' not in st.session_state:
     st.session_state.student_profile = {}
+# NEW: Store fetched profile data for the dashboard
+if 'fetched_profile_data' not in st.session_state:
+    st.session_state.fetched_profile_data = None
 
 # ==========================================
 # PHASE 1: SETUP & CONFIGURATION
 # ==========================================
 if st.session_state.phase == 'setup':
     st.title("📚 AI Adaptive Test Engine")
-    st.subheader("1. User Profile")
     
+    # --- 1. Identity & Exam Selection ---
+    st.subheader("1. User Profile")
     col1, col2 = st.columns(2)
     with col1:
         student_id = st.text_input("Student ID", value="Physics Student V2")
     with col2:
-        # UPDATED: Dynamic Exam Selection
         exam_preset = st.selectbox("Target Exam", ["JEE MAINS", "UPSC", "AWS SOLUTIONS ARCHITECT", "SSC CGL", "Custom Exam..."])
         if exam_preset == "Custom Exam...":
             target_exam = st.text_input("Enter Custom Exam Name", value="CAT Exam")
         else:
             target_exam = exam_preset
-        
-    st.subheader("2. Test Configuration")
-    adaptive_mode = st.toggle("Enable Adaptive Mode (Targets Weaknesses)", value=True)
-    
-    col3, col4 = st.columns(2)
-    with col3:
-        target_subject = st.text_input("Target Subject", value="Quantitative Aptitude")
-        target_topic = st.text_input("Target Topic", value="Arithmetic")
-    with col4:
-        target_difficulty = st.slider("Difficulty Level", 1, 5, 3)
-        num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
 
-    if st.button("Generate Test 🚀", use_container_width=True):
+    st.divider()
+
+    # --- 2. Testing Mode Selection ---
+    st.subheader("2. Testing Mode")
+    adaptive_mode = st.toggle("Enable Adaptive Learning Mode", value=True)
+    
+    # Variables to hold final configuration
+    target_subject = ""
+    target_topic = ""
+    target_difficulty = 3
+    num_questions = 5
+    selected_override_topics = []
+
+    if not adaptive_mode:
+        # MANUAL MODE UI
+        st.info("Manual Mode: Select exactly what you want to study.")
+        col3, col4 = st.columns(2)
+        with col3:
+            target_subject = st.text_input("Target Subject", value="Quantitative Aptitude")
+            target_topic = st.text_input("Target Topic", value="Arithmetic")
+        with col4:
+            target_difficulty = st.slider("Difficulty Level", 1, 5, 3)
+            num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
+    
+    else:
+        # ADAPTIVE MODE UI ("Glass-Box" Dashboard)
+        st.success("Adaptive Mode: The AI will target your weak areas based on your history.")
+        
+        target_subject = st.text_input("Broad Target Subject", value="Quantitative Aptitude", help="Tell the AI which broad subject to analyze your history within.")
+        
+        col_diff, col_num = st.columns(2)
+        with col_diff:
+            target_difficulty = st.slider("Difficulty Level", 1, 5, 3)
+        with col_num:
+            num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
+
+        # Fetch Profile Button
+        if st.button("🔍 Load My Learning Profile", type="secondary"):
+            with st.spinner("Fetching historical data..."):
+                payload = {
+                    "action": "get_profile",
+                    "student_profile": {"student_id": student_id, "target_exam": target_exam}
+                }
+                try:
+                    res = requests.post(API_URL, json=payload, timeout=30)
+                    if res.status_code == 200:
+                        st.session_state.fetched_profile_data = res.json().get('profile', {})
+                    else:
+                        st.error(f"Failed to load profile: {res.text}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+        # Render Dashboard if data exists
+        if st.session_state.fetched_profile_data:
+            prof_data = st.session_state.fetched_profile_data
+            proficiencies = prof_data.get('topic_proficiencies', {})
+            
+            st.markdown("### 📊 Your Progress Dashboard")
+            st.metric("Total Tests Taken", prof_data.get('tests_taken', 0))
+            st.progress(prof_data.get('overall_readiness_score', 0.0), text=f"Overall Exam Readiness: {prof_data.get('overall_readiness_score', 0.0):.2f}/1.0")
+            
+            if not proficiencies:
+                st.info("No historical topics found for this exam. The AI will start exploring new topics for you!")
+            else:
+                st.markdown("#### Topic Mastery & Next Test Selection")
+                st.write("Review your progress. The AI has pre-selected your 3 weakest topics to focus on next, but you can change them.")
+                
+                # Sort topics by weakness to determine auto-selection
+                sorted_topics = sorted(proficiencies.items(), key=lambda x: x[1])
+                auto_select_topics = [t[0] for t in sorted_topics[:3]]
+                
+                # Render a progress bar and checkbox for every explored topic
+                for topic, score in proficiencies.items():
+                    col_chk, col_prog = st.columns([1, 4])
+                    with col_chk:
+                        # Auto-check if it's in the bottom 3
+                        is_checked = st.checkbox(topic, value=(topic in auto_select_topics))
+                        if is_checked:
+                            selected_override_topics.append(topic)
+                    with col_prog:
+                        st.progress(score, text=f"{score:.2f}/1.0")
+
+    # --- 3. Generate Action ---
+    st.divider()
+    if st.button("Generate Test 🚀", use_container_width=True, type="primary"):
         with st.spinner(f"Generating highly calibrated questions for {target_exam}..."):
             payload = {
                 "action": "generate",
@@ -78,10 +148,12 @@ if st.session_state.phase == 'setup':
                 },
                 "test_config": {
                     "target_subject": target_subject,
-                    "target_topic": target_topic,
+                    "target_topic": target_topic if not adaptive_mode else "Auto-Selected",
                     "target_difficulty": target_difficulty,
                     "num_questions": num_questions,
-                    "adaptive_mode": adaptive_mode
+                    "adaptive_mode": adaptive_mode,
+                    # Send the specific topics the user checked in the dashboard
+                    "override_topics": selected_override_topics if adaptive_mode else None 
                 }
             }
             
@@ -182,4 +254,5 @@ elif st.session_state.phase == 'results':
         st.session_state.questions = []
         st.session_state.user_answers = {}
         st.session_state.evaluation = None
+        st.session_state.fetched_profile_data = None # Clear dashboard data for next run
         st.rerun()
