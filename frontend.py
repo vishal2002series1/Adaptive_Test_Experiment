@@ -69,7 +69,8 @@ if st.session_state.phase == 'setup':
     with col1:
         student_id = st.text_input("Student ID", value="Physics Student V2")
     with col2:
-        exam_preset = st.selectbox("Target Exam", ["JEE MAINS", "UPSC", "AWS SOLUTIONS ARCHITECT", "SSC CGL", "Custom Exam..."])
+        # EXACT MATCH TO JSON KEYS: Ensure these match the top-level keys in syllabus_maps.json!
+        exam_preset = st.selectbox("Target Exam", ["UPSC CSE Prelims", "UPSC CSE Mains", "SSC CGL", "IBPS PO", "IBPS RRB PO", "RBI Grade B", "GATE CSE", "Custom Exam..."])
         if exam_preset == "Custom Exam...":
             target_exam = st.text_input("Enter Custom Exam Name", value="CAT Exam")
         else:
@@ -126,7 +127,9 @@ if st.session_state.phase == 'setup':
 
         if st.session_state.fetched_profile_data:
             prof_data = st.session_state.fetched_profile_data
-            proficiencies = prof_data.get('topic_proficiencies', {})
+            
+            # UPGRADED: Read the new structured array instead of the old flat dictionary
+            proficiencies = prof_data.get('proficiencies', [])
             
             st.markdown("### 📊 Your Progress Dashboard")
             st.metric("Total Tests Taken", prof_data.get('tests_taken', 0))
@@ -135,20 +138,26 @@ if st.session_state.phase == 'setup':
             if not proficiencies:
                 st.info("No historical topics found for this exam. The AI will start exploring new topics for you!")
             else:
-                st.markdown("#### Topic Mastery & Next Test Selection")
-                st.write("Review your progress. The AI has pre-selected your 3 weakest topics to focus on next, but you can change them.")
+                st.markdown("#### Sub-Topic Mastery & Next Test Selection")
+                st.write("Review your progress. The AI has pre-selected your 3 weakest sub-topics to focus on next, but you can change them.")
                 
-                sorted_topics = sorted(proficiencies.items(), key=lambda x: x[1])
-                auto_select_topics = [t[0] for t in sorted_topics[:3]]
+                # Sort the array of dictionaries by score
+                sorted_profs = sorted(proficiencies, key=lambda x: x.get('score', 0.0))
+                auto_select_topics = [p.get('sub_topic') for p in sorted_profs[:3]]
                 
-                for topic, score in proficiencies.items():
+                for p in proficiencies:
+                    sub_topic = p.get('sub_topic', 'Unknown')
+                    topic = p.get('topic', 'Unknown')
+                    score = p.get('score', 0.0)
+                    attempts = p.get('questions_attempted', 0)
+                    
                     col_chk, col_prog = st.columns([1, 4])
                     with col_chk:
-                        is_checked = st.checkbox(topic, value=(topic in auto_select_topics))
+                        is_checked = st.checkbox(f"{sub_topic}", value=(sub_topic in auto_select_topics), key=f"chk_{sub_topic}")
                         if is_checked:
-                            selected_override_topics.append(topic)
+                            selected_override_topics.append(sub_topic)
                     with col_prog:
-                        st.progress(score, text=f"{score:.2f}/1.0")
+                        st.progress(score, text=f"{topic} > {sub_topic} | Score: {score:.2f} ({attempts} Qs)")
 
     st.divider()
     if st.button("Generate Test 🚀", use_container_width=True, type="primary"):
@@ -205,13 +214,11 @@ elif st.session_state.phase == 'testing':
     st.write("Please answer the following questions.")
     st.divider()
     
-    # Track which shared contexts we've already displayed to avoid repetition
     rendered_contexts = set()
     
     for i, q in enumerate(st.session_state.questions):
         context = q.get('shared_context')
         
-        # If the question belongs to a shared block, print the context once
         if context and context not in rendered_contexts:
             st.markdown("### 📖 Shared Context Passage")
             st.info(format_latex(context))
@@ -273,11 +280,9 @@ elif st.session_state.phase == 'results':
         q_id = result["question_id"]
         original_q = next((q for q in st.session_state.questions if q["id"] == q_id), None)
         
-        # `text` now solely contains the specific question prompt
         display_text = original_q.get('text', 'Unknown') if original_q else "Unknown"
         
         with st.expander(f"Question: {format_latex(display_text[:60])}..."):
-            # Provide a hint if this belonged to a larger context block
             if original_q and original_q.get('shared_context'):
                 st.caption("*(This question was part of a Shared Context Passage)*")
                 
@@ -288,7 +293,12 @@ elif st.session_state.phase == 'results':
                 st.error(f"❌ Your Answer: {result['student_answer']} | Correct Answer: {result['correct_answer']}")
             
             st.markdown(f"**Explanation:** {format_latex(original_q['explanation'])}")
-            st.caption(f"Topic: {result.get('topic', 'N/A')} | Score Delta: {result.get('score_delta', 'N/A')}")
+            
+            # UPGRADED: Display the 3-Tier mapping in the results!
+            if original_q:
+                meta = original_q.get('metadata', {})
+                st.caption(f"Taxonomy: {meta.get('subject', 'N/A')} > {meta.get('topic', 'N/A')} > {meta.get('sub_topic', 'N/A')} | Source: {meta.get('taxonomy_source', 'N/A')}")
+            st.caption(f"Score Delta: {result.get('score_delta', 'N/A')}")
 
     st.divider()
     if st.button("Take Another Test 🔄"):

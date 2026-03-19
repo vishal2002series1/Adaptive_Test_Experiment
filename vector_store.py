@@ -7,6 +7,7 @@ from google import genai
 from google.genai import types 
 from schema import Question, StudentProfile
 from typing import List, Optional
+from dotenv import load_dotenv  # <-- 1. ADD THIS IMPORT
 
 # ==========================================
 # 1. CLOUD INITIALIZATION
@@ -19,7 +20,8 @@ host = os.environ.get('OPENSEARCH_ENDPOINT', '').replace('https://', '')
 region = os.environ.get('AWS_REGION', 'us-east-1')
 service = 'aoss'
 
-INDEX_NAME = "upsc-adaptive-questions"
+# UPGRADED: V2 Index to support new schema mappings without crashing
+INDEX_NAME = "adaptive-questions-v2"
 
 def get_opensearch_client():
     if not host or host == "pending-console-setup":
@@ -66,20 +68,24 @@ def _ensure_index_exists(client):
                         }
                     },
                     "id": {"type": "keyword"},
-                    "topic": {"type": "keyword"},
                     "exam": {"type": "keyword"},
                     "subject": {"type": "keyword"},
-                    "difficulty": {"type": "integer"}
+                    "topic": {"type": "keyword"},
+                    "sub_topic": {"type": "keyword"},
+                    "taxonomy_source": {"type": "keyword"},
+                    "difficulty": {"type": "integer"},
+                    "correct_answer": {"type": "keyword"}
                 }
             }
         }
         try:
             client.indices.create(index=INDEX_NAME, body=index_body)
+            print(f"✅ Created new index: {INDEX_NAME}")
         except Exception as e:
             pass
 
 # ==========================================
-# 2. THE SAVER (INGESTION ENGINE)
+# 2. THE SAVER (INGESTION & DEDUPLICATION)
 # ==========================================
 
 def save_questions_to_db(questions: List[Question]):
@@ -88,25 +94,76 @@ def save_questions_to_db(questions: List[Question]):
     _ensure_index_exists(client)
 
     for q in questions:
+        # THE GROUP BYPASS RULE: Do not deduplicate grouped passages!
+        if q.shared_context:
+            print(f"   -> 🛡️ Bypassing Deduplication for Grouped Question: {q.id}")
+            _index_question(client, q)
+            continue
+
         embed_text = f"Question: {q.text} Explanation: {q.explanation}"
         vector = get_embedding(embed_text)
         
         if not vector:
             continue
             
-        doc = json.loads(q.model_dump_json())
-        
-        doc['embedding'] = vector
-        doc['topic'] = q.metadata.topic
-        doc['exam'] = q.metadata.exam
-        doc['subject'] = q.metadata.subject
-        doc['difficulty'] = q.metadata.difficulty_level
+        # THE DEDUPLICATION ENGINE: Check for similar questions in the SAME exam
+        search_body = {
+            "size": 1,
+            "query": {
+                "bool": {
+                    "must": [
+                        {"knn": {"embedding": {"vector": vector, "k": 3}}}
+                    ],
+                    "filter": [
+                        {"term": {"exam": q.metadata.exam}}
+                    ]
+                }
+            }
+        }
         
         try:
-            client.index(index=INDEX_NAME, body=doc)
-            print(f"   -> Embedded and saved question: {q.id}")
+            response = client.search(index=INDEX_NAME, body=search_body)
+            hits = response.get('hits', {}).get('hits', [])
+            
+            is_duplicate = False
+            if hits:
+                best_hit = hits[0]
+                # OpenSearch Cosine Sim Score is usually 1 + cosine_similarity. So 1.95 means >95% similar.
+                score = best_hit.get('_score', 0)
+                existing_answer = best_hit.get('_source', {}).get('correct_answer')
+                
+                if score >= 1.95 and existing_answer == q.correct_answer:
+                    print(f"   -> ♻️ Duplicate Found! Discarding {q.id} (Matches {best_hit['_source']['id']} with score {score:.2f})")
+                    is_duplicate = True
+            
+            if not is_duplicate:
+                _index_question(client, q, vector)
+                
         except Exception as e:
-            print(f"❌ Failed to save question {q.id} to OpenSearch: {e}")
+            print(f"⚠️ Search failed, saving anyway: {e}")
+            _index_question(client, q, vector)
+
+def _index_question(client, q: Question, vector: List[float] = None):
+    if not vector:
+        embed_text = f"Question: {q.text} Explanation: {q.explanation}"
+        vector = get_embedding(embed_text)
+        if not vector: return
+
+    doc = json.loads(q.model_dump_json())
+    doc['embedding'] = vector
+    doc['exam'] = q.metadata.exam
+    doc['subject'] = q.metadata.subject
+    doc['topic'] = q.metadata.topic
+    doc['sub_topic'] = q.metadata.sub_topic
+    doc['taxonomy_source'] = q.metadata.taxonomy_source
+    doc['difficulty'] = q.metadata.difficulty_level
+    doc['correct_answer'] = q.correct_answer
+    
+    try:
+        client.index(index=INDEX_NAME, body=doc)
+        print(f"   -> Embedded and saved question: {q.id}")
+    except Exception as e:
+        print(f"❌ Failed to save question {q.id} to OpenSearch: {e}")
 
 # ==========================================
 # 3. THE RETRIEVER (SEARCH ENGINE)
@@ -115,7 +172,7 @@ def save_questions_to_db(questions: List[Question]):
 def retrieve_best_question(
     target_exam: str, 
     target_subject: str, 
-    target_topic: str, 
+    target_topic: str, # Note: Passed but we rely on sub_topic for tight granularity now
     target_difficulty: int,
     student_profile: StudentProfile,
     exclude_ids: List[str]
@@ -123,6 +180,7 @@ def retrieve_best_question(
     client = get_opensearch_client()
     if not client or not client.indices.exists(index=INDEX_NAME): return None
 
+    # We now filter strictly by sub_topic to match the 3-tier architecture
     query = {
         "size": 1,
         "query": {
@@ -136,8 +194,10 @@ def retrieve_best_question(
         }
     }
     
-    if target_topic != "All Syllabus":
-         query["query"]["bool"]["must"].append({"term": {"topic": target_topic}})
+    if target_topic != "All Syllabus" and target_topic != "General":
+         # In the real system, you would pass target_sub_topic here from the blueprint req.
+         # For backwards compatibility with the planner node call, we map topic -> sub_topic field
+         query["query"]["bool"]["must"].append({"term": {"sub_topic": target_topic}})
 
     try:
         response = client.search(index=INDEX_NAME, body=query)
@@ -145,10 +205,11 @@ def retrieve_best_question(
         if hits:
             source = hits[0]['_source']
             source.pop('embedding', None)
-            source.pop('topic', None)
-            source.pop('exam', None)
-            source.pop('subject', None)
-            source.pop('difficulty', None)
+            
+            # Clean up flattened root fields before reconstructing the Pydantic model
+            for field in ['exam', 'subject', 'topic', 'sub_topic', 'taxonomy_source', 'difficulty', 'correct_answer']:
+                source.pop(field, None)
+                
             return Question(**source)
     except Exception as e:
         pass
@@ -160,7 +221,6 @@ def retrieve_best_question(
 # ==========================================
 
 def cosine_similarity(v1: List[float], v2: List[float]) -> float:
-    """Calculates cosine similarity mathematically without needing numpy."""
     dot_product = sum(a * b for a, b in zip(v1, v2))
     norm_v1 = math.sqrt(sum(a * a for a in v1))
     norm_v2 = math.sqrt(sum(b * b for b in v2))
@@ -169,17 +229,11 @@ def cosine_similarity(v1: List[float], v2: List[float]) -> float:
     return dot_product / (norm_v1 * norm_v2)
 
 def semantic_snap_topic(new_topic: str, existing_topics: List[str], similarity_threshold: float = 0.85) -> str:
-    """
-    Embeds the new topic and compares it to existing topics.
-    If similarity > threshold, returns the existing topic (snaps to it).
-    Otherwise, returns the new topic.
-    """
     if not existing_topics:
         return new_topic
 
     print(f"🔄 Semantic Snapper: Checking if '{new_topic}' is a duplicate...")
     
-    # 1. Convert the new topic into a mathematical vector
     new_vector = get_embedding(new_topic)
     if not new_vector:
         return new_topic 
@@ -187,7 +241,6 @@ def semantic_snap_topic(new_topic: str, existing_topics: List[str], similarity_t
     best_match = None
     highest_score = -1.0
 
-    # 2. Compare it against all vectors of topics the student has already seen
     for existing_topic in existing_topics:
         existing_vector = get_embedding(existing_topic)
         if not existing_vector:
@@ -198,7 +251,6 @@ def semantic_snap_topic(new_topic: str, existing_topics: List[str], similarity_t
             highest_score = score
             best_match = existing_topic
 
-    # 3. Snap or Keep
     if highest_score >= similarity_threshold:
         print(f"✨ Semantic Snapper: Snapped '{new_topic}' -> '{best_match}' (Score: {highest_score:.2f})")
         return best_match

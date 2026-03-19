@@ -3,7 +3,7 @@ import boto3
 import json
 from decimal import Decimal
 from typing import Dict, Any
-from schema import StudentProfile
+from schema import StudentProfile, ProficiencyRecord
 
 dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
 TABLE_NAME = os.environ.get('STUDENT_TABLE', 'AdaptiveStudentProfiles') 
@@ -17,9 +17,26 @@ def get_student_profile(student_id: str, target_exam: str) -> StudentProfile:
             'target_exam': target_exam  
         })
         if 'Item' in response:
-            # DynamoDB returns Decimals, which Pydantic happily casts back to floats.
-            # If 'explored_topics' is missing from old DB records, Pydantic's default_factory handles it automatically.
-            return StudentProfile(**response['Item'])
+            item = response['Item']
+            
+            # --- THE SAFETY NET: ON-THE-FLY MIGRATION ---
+            # If we detect the old flat dictionary, we instantly transform it 
+            # into the new structured array so Pydantic validates cleanly.
+            if 'topic_proficiencies' in item and 'proficiencies' not in item:
+                print(f"⚠️ Legacy data detected for {student_id}. Running on-the-fly migration...")
+                old_profs = item.pop('topic_proficiencies')
+                new_profs = []
+                for topic_name, score in old_profs.items():
+                    new_profs.append({
+                        "subject": "Legacy Subject",
+                        "topic": "Legacy Topic",
+                        "sub_topic": str(topic_name),
+                        "score": float(score),
+                        "questions_attempted": 1 
+                    })
+                item['proficiencies'] = new_profs
+
+            return StudentProfile(**item)
     except Exception as e:
         print(f"⚠️ Warning: Could not fetch from DynamoDB ({e}). Using default profile.")
     
@@ -31,8 +48,6 @@ def save_student_profile(profile: StudentProfile) -> bool:
         item = profile.model_dump()
         
         # --- Boto3 Float to Decimal Converter ---
-        # Convert the dict to a JSON string, then parse it back into a dict 
-        # while forcing all floating-point numbers to become Decimals for DynamoDB.
         dynamo_item = json.loads(json.dumps(item), parse_float=Decimal)
         
         table.put_item(Item=dynamo_item)

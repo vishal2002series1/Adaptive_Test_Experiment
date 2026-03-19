@@ -1,0 +1,1284 @@
+{
+  "UPSC CSE Prelims": {
+    "General Studies Paper 1 (GS-1)": {
+      "Current Events": [
+        "National Government Schemes & Programmes",
+        "Acts, Bills & Amendments",
+        "Supreme Court & High Court Judgements",
+        "International Organisations & their Initiatives",
+        "Global Indices, Reports & Summits",
+        "Bilateral & Multilateral Relations",
+        "Persons, Places & Species in News",
+        "Awards & Honours"
+      ],
+      "History of India": [
+        "Indus Valley Civilisation",
+        "Vedic Age & Mahajanapadas",
+        "Buddhism & Jainism",
+        "Mauryan & Post-Mauryan Empires",
+        "Gupta Empire & Post-Gupta Period",
+        "South Indian Kingdoms (Chola, Pandya, Chera)",
+        "Delhi Sultanate",
+        "Mughal Empire",
+        "Bhakti & Sufi Movements",
+        "Maratha Empire",
+        "Advent of European Powers",
+        "British Conquest & Economic Impact",
+        "Social & Religious Reform Movements",
+        "Revolt of 1857",
+        "Rise of Indian Nationalism & INC",
+        "Gandhian Movements (Non-Cooperation, Civil Disobedience, Quit India)",
+        "Revolutionary Nationalism (INA, Bhagat Singh)",
+        "Constitutional Developments (1919, 1935 Acts)",
+        "Partition & Independence"
+      ],
+      "Art & Culture": [
+        "Classical Dance Forms (Bharatanatyam, Kathak, Odissi, etc.)",
+        "Hindustani & Carnatic Music",
+        "Indian Painting Traditions (Madhubani, Warli, Miniature, etc.)",
+        "Temple Architecture (Nagara, Dravida, Vesara)",
+        "Sculpture Traditions (Gandhara, Mathura, Amaravati)",
+        "Languages & Literature of India",
+        "Fairs & Festivals",
+        "Indian Textiles & GI-tagged Products",
+        "UNESCO Intangible Cultural Heritage from India",
+        "Indian Philosophy (Orthodox Schools, Buddhism, Jainism)"
+      ],
+      "Indian Geography": [
+        "Physiographic Divisions of India",
+        "Himalayan & Peninsular Rivers",
+        "Indian Climate & Monsoon Mechanism",
+        "Soils of India",
+        "Natural Vegetation & Biodiversity Hotspots",
+        "Agriculture – Crops, Irrigation, Green Revolution",
+        "Major Industries & their Location",
+        "Transport – Roads, Railways, Ports, Airways",
+        "India's International Boundaries & Neighbours"
+      ],
+      "World Geography": [
+        "Interior of the Earth & Plate Tectonics",
+        "Rocks, Earthquakes & Volcanoes",
+        "Geomorphic Processes & Landforms (Fluvial, Glacial, Aeolian, Coastal)",
+        "Atmosphere – Pressure Belts, Wind Systems & Cyclones",
+        "World Climate Classification",
+        "Ocean Currents, Tides & Salinity",
+        "Major World Mountain Ranges, Rivers & Lakes",
+        "Important Straits, Seas & Water Bodies",
+        "Major Continents – Physical & Economic Features"
+      ],
+      "Indian Polity": [
+        "Preamble, Salient Features & Schedules",
+        "Fundamental Rights (Articles 12–35)",
+        "Directive Principles & Fundamental Duties",
+        "President, Vice President & Council of Ministers",
+        "Parliament – Lok Sabha & Rajya Sabha",
+        "Supreme Court & Judicial Review",
+        "Governor, Chief Minister & State Legislature",
+        "Panchayati Raj (73rd Amendment) & Urban Local Bodies (74th Amendment)",
+        "Constitutional & Statutory Bodies (ECI, CAG, UPSC, Finance Commission, NHRC, CIC, NGT)",
+        "Emergency Provisions (Articles 352, 356, 360)",
+        "Centre-State Relations & Federalism",
+        "Key Constitutional Amendments"
+      ],
+      "Economy & Social Development": [
+        "GDP, GNP, National Income Accounting",
+        "Inflation – Types, Measurement (WPI, CPI)",
+        "Monetary Policy – RBI Instruments (Repo, CRR, SLR, OMO)",
+        "Fiscal Policy, Union Budget & Government Expenditure",
+        "Balance of Payments & Foreign Exchange",
+        "Agricultural Sector – MSP, APMC, e-NAM, Crop Insurance",
+        "Five Year Plans, NITI Aayog & Atmanirbhar Bharat",
+        "Banking Sector – NPAs, IBC, Payment Banks",
+        "Capital Markets, SEBI & Insurance",
+        "Poverty Measurement & Alleviation Programmes (MGNREGA, PMAY)",
+        "Sustainable Development Goals (SDGs)",
+        "Social Sector Schemes (Ayushman Bharat, NEP 2020, Swachh Bharat, Jal Jeevan Mission)",
+        "International Economic Institutions (IMF, World Bank, WTO, ADB, NDB, AIIB)"
+      ],
+      "Environment & Ecology": [
+        "Ecosystem Structure, Food Chains & Energy Flow",
+        "Biogeochemical Cycles (Carbon, Nitrogen, Phosphorus)",
+        "Biodiversity – Levels, Hotspots, IUCN Categories",
+        "Threats to Biodiversity & Conservation (In-situ, Ex-situ)",
+        "International Conventions (CBD, Nagoya Protocol, CITES, Ramsar)",
+        "National Parks, Wildlife Sanctuaries & Biosphere Reserves",
+        "Environmental Pollution (Air, Water, Soil, Noise, Marine)",
+        "Solid & Hazardous Waste Management",
+        "Ozone Layer Depletion & Montreal Protocol",
+        "Climate Change – Causes, Impacts & IPCC Reports",
+        "UNFCCC, Paris Agreement, COPs & NDCs",
+        "Environmental Laws (EPA 1986, WPA 1972, FCA 1980)",
+        "National Green Tribunal (NGT)"
+      ],
+      "General Science": [
+        "Physics – Waves, Light, Electricity, Magnetism, Radioactivity, Nuclear Energy",
+        "Chemistry – Periodic Table, Acids & Bases, Polymers, Fertilisers, Drugs",
+        "Biology – Cell Division, Genetics, Human Physiology, Diseases & Vaccines",
+        "Biotechnology – GMOs, Recombinant DNA, CRISPR, Stem Cells",
+        "Space Technology – ISRO Missions (Chandrayaan, Gaganyaan, PSLV, GSLV)",
+        "Defence Technology – Missiles, Drones, Stealth",
+        "Artificial Intelligence, IoT & Blockchain",
+        "5G, Quantum Computing & Cybersecurity",
+        "Renewable Energy – Solar, Wind, Hydrogen, Battery Storage",
+        "Medical Technology – Genomics, Precision Medicine, Telemedicine"
+      ]
+    },
+    "CSAT (Paper 2)": {
+      "Reading Comprehension": [
+        "Inference-Based Passages",
+        "Theme & Title Identification",
+        "Fact vs Opinion",
+        "Vocabulary in Context"
+      ],
+      "Logical Reasoning & Analytical Ability": [
+        "Logical Sequences & Analogies",
+        "Syllogisms & Statements-Conclusions",
+        "Assumptions & Arguments",
+        "Courses of Action",
+        "Critical Reasoning"
+      ],
+      "Decision Making & Problem Solving": [
+        "Situational Judgement",
+        "Administrative Problem Solving",
+        "Ethical Dilemmas in Decisions"
+      ],
+      "General Mental Ability": [
+        "Number Series & Letter Series",
+        "Coding & Decoding",
+        "Blood Relations",
+        "Direction & Distance",
+        "Calendars & Clocks"
+      ],
+      "Basic Numeracy": [
+        "Number System & Divisibility",
+        "Percentages, Profit & Loss",
+        "Ratio, Proportion & Mixtures",
+        "Time, Speed & Distance",
+        "Simple & Compound Interest",
+        "Data Sufficiency"
+      ],
+      "Data Interpretation": [
+        "Tables",
+        "Bar Graphs & Line Graphs",
+        "Pie Charts",
+        "Caselets"
+      ]
+    }
+  },
+
+  "UPSC CSE Mains": {
+    "Essay Paper": {
+      "Section A – Abstract & Philosophical Themes": [
+        "Ethics, Values & Human Character",
+        "Education & Knowledge",
+        "Philosophy of Life & Society",
+        "Science, Technology & Humanity"
+      ],
+      "Section B – Contemporary & Socio-Economic Themes": [
+        "Governance & Democracy",
+        "Economic Development & Inequality",
+        "Environment & Sustainable Development",
+        "India & the World"
+      ]
+    },
+    "GS Paper 1 – History, Geography & Society": {
+      "Indian Heritage & Culture": [
+        "Salient Aspects of Art Forms from Ancient to Modern Times",
+        "Architecture from Ancient to Medieval to Modern",
+        "Literature – Sanskrit, Pali, Regional Languages",
+        "Cultural Influence of India on the World",
+        "Indian Diaspora"
+      ],
+      "Modern Indian History": [
+        "Significant Events from 1750s to the Present",
+        "Freedom Struggle – Stages & Contributors from Different Regions",
+        "Post-Independence Consolidation & Reorganisation",
+        "Social Reformers & their Contributions"
+      ],
+      "World History": [
+        "Industrial Revolution & its Impact",
+        "World Wars I & II – Causes, Consequences",
+        "Colonialism & Decolonisation",
+        "Cold War & Reshaping of World Order",
+        "Rise of Capitalism, Socialism & Communism",
+        "Redrawing of Political Map Post-World War II",
+        "Emergence of New Nations"
+      ],
+      "Indian Society": [
+        "Salient Features of Indian Society & Diversity",
+        "Role of Women & Women's Organisations",
+        "Population & Associated Issues",
+        "Poverty & Developmental Issues",
+        "Urbanisation – Problems & Remedies",
+        "Effects of Globalisation on Indian Society",
+        "Social Empowerment, Communalism, Regionalism & Secularism"
+      ],
+      "World & Indian Geography": [
+        "Physical Geography – Landforms, Geomorphology, Climatology",
+        "Salient Features of World's Physical Geography",
+        "Distribution of Key Natural Resources Worldwide",
+        "Factors Responsible for Location of Industries",
+        "Critical Geographical Features – Changes in Critical Geographical Features"
+      ]
+    },
+    "GS Paper 2 – Governance, Polity & International Relations": {
+      "Indian Constitution & Polity": [
+        "Historical Underpinnings, Evolution, Features, Amendments & Basic Structure",
+        "Functions & Responsibilities of Union & States",
+        "Federal Structure Issues – Devolution of Powers & Finances",
+        "Separation of Powers & Dispute Redressal Mechanisms",
+        "Comparison with Other Countries' Constitutional Schemes",
+        "Parliament & State Legislatures – Structure, Powers & Conduct of Business",
+        "Executive & Judiciary – Structure, Organisation & Functioning",
+        "Ministries & Departments – Formation & Functioning",
+        "Pressure Groups & Formal/Informal Associations"
+      ],
+      "Governance & Social Justice": [
+        "Government Policies & Interventions for Development",
+        "Role of NGOs, SHGs & Civil Society",
+        "Welfare Schemes – Vulnerable Sections",
+        "Issues Relating to Development & Management of Social Sector (Health, Education)",
+        "Issues Relating to Poverty & Hunger",
+        "Important Aspects of Governance – Transparency, Accountability",
+        "e-Governance – Applications, Models, Successes & Limitations",
+        "Citizens Charters, Transparency & Accountability",
+        "RTI & its Implications",
+        "Statutory, Regulatory & Various Quasi-judicial Bodies"
+      ],
+      "International Relations": [
+        "India's Foreign Policy & its Evolution",
+        "India's Relations with Neighbours (Pakistan, China, Bangladesh, Nepal, Sri Lanka, Myanmar, Bhutan)",
+        "India's Interests in the Indo-Pacific & Arctic",
+        "Groupings & Agreements Involving India (SAARC, BRICS, SCO, G20, QUAD)",
+        "Effect of Developed Countries' Policies on India",
+        "Bilateral, Regional & Global Groupings & Agreements",
+        "Multilateral Institutions – UN System, WTO, IMF, World Bank",
+        "Important International Institutions & their Mandates"
+      ]
+    },
+    "GS Paper 3 – Economy, Environment, Technology & Security": {
+      "Indian Economy": [
+        "Economic Planning, Mobilisation of Resources, Growth & Employment",
+        "Inclusive Growth & Issues Arising from It",
+        "Government Budgeting – Revenue, Capital, Deficit Types",
+        "Public Distribution System – Functioning, Limitations & Revamping",
+        "Buffer Stocks & Food Security",
+        "Effects of Liberalisation on Economy & Industrial Policy",
+        "Infrastructure – Energy, Ports, Roads, Airports, Railways",
+        "Investment Models – PPP, FDI, FPI"
+      ],
+      "Agriculture": [
+        "Major Crops & Cropping Patterns Across India",
+        "Types of Irrigation & Irrigation Systems",
+        "Storage, Transport & Marketing of Agricultural Produce",
+        "Direct & Indirect Farm Subsidies & MSP Issues",
+        "Animal Husbandry, Fisheries & Aquaculture",
+        "Food Processing Industry & its Scope",
+        "E-technology in Aid of Farmers",
+        "Land Reforms & Agricultural Tenancy Issues"
+      ],
+      "Science & Technology": [
+        "Developments & their Applications in Daily Life",
+        "Science & Technology – Indigenisation & Developing New Technology",
+        "IT, Space, Computers, Robotics, Nanotechnology, Biotechnology",
+        "Issues Relating to Intellectual Property Rights",
+        "ISRO, Defence Research & Space Economy",
+        "AI, Machine Learning & Data Governance",
+        "Cybersecurity – Threats, Policies & Frameworks"
+      ],
+      "Environment & Disaster Management": [
+        "Conservation, Environmental Pollution & Degradation",
+        "Environmental Impact Assessment",
+        "Climate Change – International Agreements & India's Actions",
+        "Disaster & Disaster Management – Natural & Man-made",
+        "Linkages between Development & Spread of Extremism"
+      ],
+      "Internal Security": [
+        "Challenges to Internal Security from Non-State Actors",
+        "Internal Security Challenges through Communication Networks",
+        "Role of External State & Non-State Actors",
+        "Money Laundering & its Prevention",
+        "Linkages of Organised Crime with Terrorism",
+        "Security Challenges in Border Areas",
+        "Cyber Security – Critical Infrastructure Protection",
+        "Role of Media & Social Networking in Internal Security",
+        "Basics of Cyber Security, Money Laundering & NIA Act"
+      ]
+    },
+    "GS Paper 4 – Ethics, Integrity & Aptitude": {
+      "Ethics & Human Interface": [
+        "Essence, Determinants & Consequences of Ethics",
+        "Dimensions of Ethics – Private & Public",
+        "Human Values – Lessons from Great Leaders & Reformers",
+        "Role of Family, Society & Educational Institutions in Inculcating Values"
+      ],
+      "Attitude": [
+        "Content, Structure & Function of Attitude",
+        "Influence & Relation of Attitude with Thought & Behaviour",
+        "Moral & Political Attitudes",
+        "Social Influence & Persuasion"
+      ],
+      "Aptitude & Foundational Values for Civil Services": [
+        "Integrity, Impartiality & Non-partisanship",
+        "Objectivity, Dedication to Public Service",
+        "Empathy, Tolerance & Compassion",
+        "Emotional Intelligence – Concepts & Utility"
+      ],
+      "Moral Thinkers & Philosophers": [
+        "Contributions of Moral Thinkers from India (Gandhi, Vivekananda, Ambedkar, Kautilya)",
+        "Contributions of Western Moral Philosophers (Aristotle, Kant, Bentham, Mill)",
+        "Relevance to Contemporary Governance"
+      ],
+      "Public/Civil Service Values & Ethics in Administration": [
+        "Status & Problems of Ethics in Public Administration",
+        "Ethical Concerns & Dilemmas in Government",
+        "Laws, Rules, Regulations & Conscience",
+        "Accountability & Ethical Governance",
+        "Strengthening of Ethical & Moral Values in Governance",
+        "International Relations Ethics & Funding of NGOs"
+      ],
+      "Probity in Governance": [
+        "Concept of Public Service",
+        "Philosophical Basis of Governance & Probity",
+        "Information Sharing & Transparency in Government",
+        "RTI – Challenges of Corruption",
+        "Codes of Ethics & Codes of Conduct",
+        "Citizen's Charters & Work Culture",
+        "Quality of Service Delivery & Utilisation of Public Funds",
+        "Case Studies on the Above Issues"
+      ]
+    }
+  },
+
+  "SSC CGL": {
+    "Tier 1 – General Intelligence & Reasoning": {
+      "Verbal Reasoning": [
+        "Analogies",
+        "Coding & Decoding",
+        "Blood Relations",
+        "Syllogism",
+        "Statements & Conclusions",
+        "Direction & Distance",
+        "Ranking & Order",
+        "Calendars & Clocks",
+        "Number & Letter Series"
+      ],
+      "Non-Verbal Reasoning": [
+        "Pattern Completion & Completion of Series",
+        "Mirror & Water Images",
+        "Paper Folding & Cutting",
+        "Embedded Figures",
+        "Counting Figures",
+        "Venn Diagrams"
+      ],
+      "Analytical Reasoning": [
+        "Seating Arrangement",
+        "Puzzles",
+        "Data Sufficiency",
+        "Critical Thinking – Assumptions & Arguments"
+      ]
+    },
+    "Tier 1 – Quantitative Aptitude": {
+      "Arithmetic": [
+        "Number System & Simplification",
+        "HCF & LCM",
+        "Percentages",
+        "Profit, Loss & Discount",
+        "Simple & Compound Interest",
+        "Ratio & Proportion",
+        "Mixtures & Alligation",
+        "Time, Speed & Distance",
+        "Time & Work & Pipes",
+        "Average & Problems on Ages"
+      ],
+      "Advanced Mathematics": [
+        "Algebra – Identities, Linear & Quadratic Equations",
+        "Geometry – Triangles, Circles, Quadrilaterals, Coordinate Geometry",
+        "Mensuration – Areas, Volumes (2D & 3D shapes)",
+        "Trigonometry – Ratios, Identities, Heights & Distances",
+        "Statistics – Mean, Median, Mode, Standard Deviation",
+        "Data Interpretation – Bar Graphs, Pie Charts, Tables, Line Graphs"
+      ]
+    },
+    "Tier 1 – English Language & Comprehension": {
+      "Grammar": [
+        "Spotting Errors",
+        "Sentence Improvement",
+        "Active & Passive Voice",
+        "Direct & Indirect Speech",
+        "Fill in the Blanks – Prepositions, Articles, Conjunctions"
+      ],
+      "Vocabulary": [
+        "Synonyms & Antonyms",
+        "One-Word Substitution",
+        "Idioms & Phrases",
+        "Spelling Correction",
+        "Word Usage in Context"
+      ],
+      "Comprehension & Writing": [
+        "Reading Comprehension",
+        "Cloze Test",
+        "Para Jumbles (Sentence Rearrangement)",
+        "Para Completion"
+      ]
+    },
+    "Tier 1 – General Awareness": {
+      "History & Culture": [
+        "Ancient, Medieval & Modern Indian History",
+        "Indian Art, Architecture & Culture",
+        "Important Personalities & their Contributions",
+        "Books & Authors"
+      ],
+      "Geography": [
+        "Physical & Political Geography of India",
+        "World Geography – Continents, Oceans, Important Locations",
+        "Environment & Ecology Basics"
+      ],
+      "Polity & Governance": [
+        "Indian Constitution – Key Articles & Amendments",
+        "Constitutional Bodies & their Functions",
+        "Governance Schemes & Programmes"
+      ],
+      "Economy": [
+        "Macroeconomics – GDP, Inflation, Budget",
+        "Banking & RBI – Functions, Policies",
+        "International Economic Organisations"
+      ],
+      "Science & Technology": [
+        "Physics – Everyday Applications",
+        "Chemistry – Common Substances & Reactions",
+        "Biology – Human Body, Diseases, Nutrition",
+        "Emerging Technologies – AI, Space, Defence"
+      ],
+      "Current Affairs": [
+        "National & International Events (last 12 months)",
+        "Sports – Major Tournaments & Awards",
+        "Summits, Agreements & Conferences"
+      ]
+    },
+    "Tier 2 – Paper I (Compulsory) – Mathematical Abilities": {
+      "Arithmetic (Higher Level)": [
+        "Number Theory – Surds, Indices, Divisibility",
+        "Percentage, Profit & Loss (Complex Problems)",
+        "Compound Interest & Annuities",
+        "Partnership & Time-Work Problems"
+      ],
+      "Advanced Mathematics (Higher Level)": [
+        "Algebra – Polynomials, Progressions (AP/GP), Functions",
+        "Geometry – Properties of Circles, Triangles, Congruence",
+        "Coordinate Geometry – Lines, Circles, Parabola",
+        "Mensuration – Complex Solids",
+        "Trigonometry – Advanced Identities & Equations",
+        "Statistics & Probability",
+        "Data Interpretation – Mixed Graphs & Caselets"
+      ]
+    },
+    "Tier 2 – Paper I (Compulsory) – Reasoning & General Intelligence": {
+      "Verbal Reasoning (Higher Level)": [
+        "Complex Analogies & Classification",
+        "Matrix-Based Reasoning",
+        "Logical Deductions & Critical Reasoning"
+      ],
+      "Non-Verbal Reasoning (Higher Level)": [
+        "Abstract Pattern Recognition",
+        "Complex Venn Diagrams",
+        "Analytical Puzzles"
+      ]
+    },
+    "Tier 2 – Paper I (Compulsory) – English Language & Comprehension": {
+      "Grammar & Usage": [
+        "Advanced Error Detection",
+        "Sentence Reconstruction & Improvement",
+        "Voice & Narration Transformation"
+      ],
+      "Comprehension & Writing": [
+        "Long Reading Comprehension (Analytical Passages)",
+        "Précis Writing",
+        "Letter & Application Writing",
+        "Essay Writing – Current & Social Issues"
+      ]
+    },
+    "Tier 2 – Paper II (Statistics – JSO Posts)": {
+      "Statistical Theory": [
+        "Collection, Classification & Tabulation of Data",
+        "Measures of Central Tendency & Dispersion",
+        "Moments, Skewness & Kurtosis",
+        "Correlation & Regression",
+        "Index Numbers & Time Series"
+      ],
+      "Probability & Distributions": [
+        "Probability Theory – Classical, Frequency & Axiomatic",
+        "Binomial, Poisson & Normal Distributions",
+        "Exponential Distribution",
+        "Sampling Theory & Methods",
+        "Statistical Inference – Estimation & Testing of Hypothesis"
+      ]
+    },
+    "Tier 2 – Paper III (General Studies – Finance & Economics – AAO Posts)": {
+      "Finance & Accounts": [
+        "Financial Accounting – Concepts, Conventions, Principles",
+        "Self-Balancing Ledger & Error Rectification",
+        "Sale & Purchase of Stock, Capital & Revenue Transactions",
+        "Depreciation Accounting",
+        "Preparation of Final Accounts"
+      ],
+      "Economics & Governance": [
+        "Macro & Micro Economics – Demand, Supply, Market Structures",
+        "Indian Economy – Planning, Growth & Employment",
+        "Money, Banking & Finance",
+        "Budget & Fiscal Policy",
+        "Role of Information Technology in Governance"
+      ]
+    }
+  },
+
+  "IBPS PO": {
+    "Preliminary Exam – Reasoning Ability": {
+      "Puzzles & Seating Arrangement": [
+        "Linear Seating Arrangement (Single & Double Row)",
+        "Circular & Rectangular Arrangement",
+        "Floor-based Puzzles",
+        "Box & Scheduling Puzzles",
+        "Month & Day-based Puzzles"
+      ],
+      "Logical Reasoning": [
+        "Syllogism (With & Without Possibility)",
+        "Inequality – Mathematical & Coded",
+        "Input-Output Machine",
+        "Statement-Assumption / Conclusion / Course of Action",
+        "Cause & Effect"
+      ],
+      "Verbal Reasoning": [
+        "Coding-Decoding (Old & New Pattern)",
+        "Blood Relations",
+        "Direction & Distance",
+        "Ranking & Order",
+        "Alphanumeric Series"
+      ],
+      "Analytical Reasoning": [
+        "Data Sufficiency",
+        "Decision Making",
+        "Critical Reasoning"
+      ]
+    },
+    "Preliminary Exam – Quantitative Aptitude": {
+      "Arithmetic": [
+        "Number System & Simplification / Approximation",
+        "Percentages",
+        "Profit, Loss & Discount",
+        "Ratio, Proportion & Partnership",
+        "Simple & Compound Interest",
+        "Time, Speed & Distance (Boats, Trains)",
+        "Time & Work & Pipes",
+        "Average, Mixtures & Alligation",
+        "Problems on Ages"
+      ],
+      "Data Interpretation": [
+        "Tabular DI",
+        "Bar Graph DI",
+        "Line Graph DI",
+        "Pie Chart DI",
+        "Mixed & Caselet DI"
+      ],
+      "Advanced Mathematics": [
+        "Quadratic Equations",
+        "Number Series (Missing & Wrong Term)",
+        "Data Sufficiency",
+        "Probability",
+        "Permutation & Combination"
+      ]
+    },
+    "Preliminary Exam – English Language": {
+      "Grammar & Usage": [
+        "Error Detection & Correction",
+        "Sentence Improvement",
+        "Fill in the Blanks (Single & Double)",
+        "Active & Passive Voice",
+        "Direct & Indirect Speech"
+      ],
+      "Vocabulary": [
+        "Synonyms & Antonyms",
+        "Word Usage – Contextual Meaning",
+        "Idioms & Phrases",
+        "One-word Substitution",
+        "Spelling & Word Pair Errors"
+      ],
+      "Comprehension & Writing": [
+        "Reading Comprehension",
+        "Cloze Test",
+        "Para Jumbles",
+        "Para / Sentence Completion",
+        "Sentence Connectors & Column-based Matching"
+      ]
+    },
+    "Mains Exam – Reasoning & Computer Aptitude": {
+      "Advanced Reasoning": [
+        "Complex Multi-Variable Puzzles",
+        "Advanced Input-Output",
+        "Logical Reasoning – Arguments, Assumptions, Inferences",
+        "Data Sufficiency (Advanced)",
+        "Coded Inequality & Coding-Decoding (New Pattern)"
+      ],
+      "Computer Aptitude": [
+        "Basics of Computer – Hardware, Software, Input/Output",
+        "Operating Systems (Windows, Linux Basics)",
+        "MS Office – Word, Excel, PowerPoint Shortcuts",
+        "Internet & Networking – Browsers, Email, TCP/IP, LAN/WAN",
+        "Cybersecurity – Threats, Malware, Firewalls",
+        "Database Basics – DBMS, SQL Fundamentals",
+        "Number Systems – Binary, Octal, Hexadecimal Conversions",
+        "Programming Basics – Algorithms, Flowcharts"
+      ]
+    },
+    "Mains Exam – Data Analysis & Interpretation": {
+      "Data Interpretation (Advanced)": [
+        "Complex Tabular DI",
+        "Mixed DI (Two or more graphs combined)",
+        "Caselet DI – Paragraph-based Data",
+        "Radar / Web Charts",
+        "Data Analysis – Comparison & Inference"
+      ],
+      "Statistical Concepts": [
+        "Mean, Median, Mode",
+        "Standard Deviation & Variance",
+        "Probability",
+        "Permutation & Combination",
+        "Set Theory & Venn Diagrams"
+      ]
+    },
+    "Mains Exam – General / Economy / Banking / Financial Awareness": {
+      "Banking & Financial Awareness": [
+        "Functions of RBI – Monetary Policy, CRR, SLR, Repo, MSF",
+        "Types of Banks – Commercial, Cooperative, Payment, Small Finance",
+        "Banking Schemes – Jan Dhan, Mudra, PM SVANidhi",
+        "NPA Management – IBC, SARFAESI Act, CIBIL",
+        "Financial Inclusion & Digital Banking – UPI, BHIM, RuPay",
+        "Insurance – IRDAI, Types of Insurance Products",
+        "Capital Markets – SEBI, Primary & Secondary Markets",
+        "Mutual Funds, Bonds & Derivatives",
+        "Budget – Revenue & Capital Expenditure, Deficit Types",
+        "Monetary Policy Committees & their Decisions"
+      ],
+      "Economy": [
+        "Macroeconomic Indicators – GDP, Inflation, Balance of Payments",
+        "Economic Survey & Union Budget Highlights",
+        "International Economic Institutions – IMF, World Bank, WTO",
+        "Government Schemes – Infrastructure, Housing, Employment",
+        "Trade Policy & FDI Regulations"
+      ],
+      "Static GK": [
+        "Currencies & Capitals of Countries",
+        "National Parks, Tiger Reserves & Sanctuaries",
+        "Important Dams, Rivers & Passes",
+        "Books & Authors",
+        "Science & Technology – Basics & Current Developments",
+        "Awards & Honours – National & International",
+        "Headquarters of Financial & International Organisations"
+      ],
+      "Current Affairs": [
+        "Last 6 Months of Banking & Financial News",
+        "RBI Circulars & Policy Announcements",
+        "New Appointments – Governor, CMD, CEO of Banks",
+        "International Summits & their Outcomes",
+        "Government Policy Announcements & Schemes"
+      ]
+    },
+    "Mains Exam – English Language": {
+      "Advanced Grammar & Usage": [
+        "Error Detection in Sentences & Paragraphs",
+        "Advanced Sentence Reconstruction",
+        "Connector-based Sentence Joining"
+      ],
+      "Advanced Comprehension": [
+        "Long Reading Comprehension (Inferential & Analytical)",
+        "Theme & Tone Identification",
+        "Vocabulary from Context"
+      ],
+      "Descriptive Writing (Essay & Letter)": [
+        "Formal & Informal Letter Writing",
+        "Essay – Banking, Economy & Current Affairs Topics",
+        "Précis Writing"
+      ]
+    }
+  },
+
+  "GATE CSE": {
+    "General Aptitude (GA)": {
+      "Verbal Ability": [
+        "English Grammar – Tenses, Subject-Verb Agreement, Articles",
+        "Vocabulary – Synonyms, Antonyms, Contextual Word Usage",
+        "Reading Comprehension",
+        "Sentence Completion & Correction",
+        "Verbal Analogies & Word Relations"
+      ],
+      "Quantitative Aptitude": [
+        "Ratio, Proportion & Percentages",
+        "Profit & Loss",
+        "Time, Speed & Distance",
+        "Number Series & Data Interpretation",
+        "Mensuration – Area & Volume Basics",
+        "Permutation & Combination",
+        "Probability"
+      ],
+      "Analytical & Logical Reasoning": [
+        "Logical Sequences & Analogies",
+        "Coding & Decoding",
+        "Blood Relations & Direction Sense",
+        "Syllogisms & Deductions",
+        "Critical Reasoning – Assumption, Argument, Inference"
+      ]
+    },
+    "Engineering Mathematics": {
+      "Discrete Mathematics": [
+        "Propositional & First-Order Logic",
+        "Sets, Relations & Functions",
+        "Partial Orders & Lattices",
+        "Monoids & Groups",
+        "Graph Theory – Connectivity, Matching, Colouring, Trees",
+        "Combinatorics – Counting, Pigeonhole, Recurrence Relations, Generating Functions"
+      ],
+      "Linear Algebra": [
+        "Matrices & Determinants",
+        "Systems of Linear Equations",
+        "Eigenvalues & Eigenvectors",
+        "LU Decomposition",
+        "Rank & Nullity"
+      ],
+      "Calculus": [
+        "Limits, Continuity & Differentiability",
+        "Mean Value Theorems",
+        "Integration – Definite & Indefinite",
+        "Sequences & Series Convergence",
+        "Multivariable Calculus – Partial Derivatives, Maxima & Minima"
+      ],
+      "Probability & Statistics": [
+        "Probability – Classical, Conditional, Bayes' Theorem",
+        "Random Variables – Discrete & Continuous",
+        "Common Distributions – Uniform, Binomial, Poisson, Exponential, Normal",
+        "Mean, Variance & Standard Deviation",
+        "Statistical Inference Basics"
+      ]
+    },
+    "Digital Logic": {
+      "Boolean Algebra": [
+        "Boolean Functions & Truth Tables",
+        "Logic Gates – AND, OR, NOT, NAND, NOR, XOR, XNOR",
+        "Simplification – K-Map, Quine-McCluskey Method",
+        "Standard Forms – SOP & POS"
+      ],
+      "Combinational Circuits": [
+        "Multiplexers & Demultiplexers",
+        "Encoders & Decoders",
+        "Adders, Subtractors, Comparators",
+        "Arithmetic Logic Unit (ALU)"
+      ],
+      "Sequential Circuits": [
+        "Latches & Flip-Flops (SR, JK, D, T)",
+        "Registers & Counters",
+        "Finite State Machines – Mealy & Moore",
+        "Minimisation of State Machines"
+      ],
+      "Number Representations": [
+        "Binary, Octal, Hexadecimal Number Systems",
+        "Signed Representation – 1's & 2's Complement",
+        "Floating-Point Representation (IEEE 754)"
+      ]
+    },
+    "Computer Organisation & Architecture": {
+      "Processor Design": [
+        "Machine Instructions & Addressing Modes",
+        "ALU, Data Path & Control Unit",
+        "Instruction Cycle & Microprogramming",
+        "Instruction Pipelining – Stages, Pipeline Hazards (Structural, Data, Control)"
+      ],
+      "Memory System": [
+        "Memory Hierarchy – Registers, Cache, RAM, Secondary Storage",
+        "Cache Memory – Mapping Techniques (Direct, Associative, Set-Associative)",
+        "Cache Performance, Replacement Policies (LRU, FIFO, Random)",
+        "Virtual Memory – Paging, Segmentation, Page Replacement Algorithms"
+      ],
+      "I/O & Parallelism": [
+        "I/O Interface – Interrupts, DMA",
+        "Secondary Storage – Magnetic Disk, HDD Organisation",
+        "Instruction Level Parallelism",
+        "RISC vs CISC Architectures"
+      ]
+    },
+    "Programming & Data Structures": {
+      "C Programming Fundamentals": [
+        "Data Types, Variables, Operators & Expressions",
+        "Control Flow – Loops, Conditionals",
+        "Functions, Recursion & Scope",
+        "Pointers, Arrays & Strings",
+        "Structures, Unions & Enumerations",
+        "Dynamic Memory Allocation – malloc, calloc, free"
+      ],
+      "Data Structures": [
+        "Arrays & Strings",
+        "Linked Lists – Singly, Doubly, Circular",
+        "Stacks & Queues (Array & Linked List Implementation)",
+        "Trees – Binary Tree, BST, AVL Tree, B-Tree, B+ Tree",
+        "Heaps – Min-Heap, Max-Heap, Priority Queue",
+        "Graphs – Representation (Adjacency Matrix & List)",
+        "Hashing – Hash Functions, Collision Resolution"
+      ]
+    },
+    "Algorithms": {
+      "Analysis of Algorithms": [
+        "Time & Space Complexity – Big-O, Omega, Theta",
+        "Best, Worst & Average Case Analysis",
+        "Recurrence Relations – Master Theorem"
+      ],
+      "Algorithm Paradigms": [
+        "Divide & Conquer – Merge Sort, Quick Sort, Binary Search",
+        "Greedy Algorithms – Activity Selection, Huffman Coding, Kruskal's, Prim's, Dijkstra's",
+        "Dynamic Programming – LCS, LIS, Matrix Chain Multiplication, Knapsack, Edit Distance",
+        "Backtracking – N-Queens, Graph Colouring"
+      ],
+      "Graph Algorithms": [
+        "BFS & DFS – Applications & Complexity",
+        "Topological Sorting",
+        "Shortest Paths – Dijkstra, Bellman-Ford, Floyd-Warshall",
+        "Minimum Spanning Tree – Kruskal's & Prim's",
+        "Strongly Connected Components – Kosaraju's Algorithm",
+        "Bipartite Graphs & Matching"
+      ],
+      "Sorting & Searching": [
+        "Comparison-based Sorting – Bubble, Selection, Insertion, Merge, Quick, Heap",
+        "Non-Comparison Sorting – Counting, Radix, Bucket Sort",
+        "Searching – Linear, Binary, Hashing-based"
+      ],
+      "Complexity Theory": [
+        "P, NP, NP-Hard & NP-Complete Problems",
+        "Polynomial Reduction & Karp Reductions",
+        "Classic NP-Complete Problems (SAT, Vertex Cover, TSP)"
+      ]
+    },
+    "Theory of Computation": {
+      "Automata Theory": [
+        "Finite Automata – DFA, NFA, Epsilon-NFA",
+        "NFA to DFA Conversion",
+        "Minimisation of DFA",
+        "Regular Expressions & Regular Grammars",
+        "Pumping Lemma for Regular Languages",
+        "Closure Properties of Regular Languages"
+      ],
+      "Context-Free Languages": [
+        "Context-Free Grammars (CFG) – Derivations, Parse Trees",
+        "Normal Forms – CNF & GNF",
+        "Pushdown Automata (PDA)",
+        "Pumping Lemma for CFLs",
+        "Closure Properties of CFLs"
+      ],
+      "Turing Machines & Computability": [
+        "Turing Machine – Definition, Variants (Multi-tape, Non-deterministic)",
+        "Decidability & Undecidability",
+        "Halting Problem & Rice's Theorem",
+        "Recursive & Recursively Enumerable Languages"
+      ]
+    },
+    "Compiler Design": {
+      "Lexical & Syntax Analysis": [
+        "Lexical Analysis – Tokens, Lexemes, Regular Expressions, LEX",
+        "Context-Free Grammars for Programming Languages",
+        "Top-Down Parsing – Recursive Descent, LL(1) Parsing",
+        "Bottom-Up Parsing – LR(0), SLR(1), LALR(1), CLR Parsing",
+        "FIRST & FOLLOW Sets"
+      ],
+      "Semantic Analysis & Code Generation": [
+        "Syntax-Directed Translation",
+        "Type Checking & Type Systems",
+        "Symbol Table",
+        "Intermediate Code Generation – 3-Address Code, TAC",
+        "Code Optimisation – Constant Folding, Dead Code Elimination, Loop Optimisation",
+        "Code Generation & Register Allocation"
+      ]
+    },
+    "Operating Systems": {
+      "Process Management": [
+        "Process vs Thread – States, PCB",
+        "CPU Scheduling Algorithms – FCFS, SJF, Round Robin, Priority, HRRN",
+        "Process Synchronisation – Race Conditions, Critical Section",
+        "Synchronisation Mechanisms – Mutex, Semaphore, Monitors",
+        "Deadlock – Conditions, Prevention, Avoidance (Banker's), Detection & Recovery",
+        "Inter-Process Communication – Pipes, Shared Memory, Message Queues"
+      ],
+      "Memory Management": [
+        "Contiguous Allocation – Fixed & Variable Partitioning, Fragmentation",
+        "Paging – Page Table, TLB, Multilevel Paging",
+        "Segmentation & Segmentation with Paging",
+        "Virtual Memory – Demand Paging, Page Fault",
+        "Page Replacement Algorithms – FIFO, LRU, Optimal, LFU, Clock"
+      ],
+      "File & I/O Systems": [
+        "File System – Inode, Directory Structure, FAT, Ext Filesystem",
+        "Disk Scheduling – FCFS, SSTF, SCAN, C-SCAN, LOOK",
+        "I/O Management – Polling, Interrupts, DMA",
+        "RAID – Levels & Trade-offs"
+      ]
+    },
+    "Databases": {
+      "Relational Model & SQL": [
+        "ER Diagram – Entities, Attributes, Relationships, Mapping",
+        "Relational Model – Tuples, Attributes, Keys (Primary, Foreign, Candidate, Super)",
+        "Relational Algebra – Select, Project, Join, Division",
+        "SQL – DDL, DML, DCL, TCL",
+        "SQL – Joins, Subqueries, Aggregation, Group By, Having",
+        "Views, Triggers & Stored Procedures"
+      ],
+      "Database Design": [
+        "Functional Dependencies",
+        "Normal Forms – 1NF, 2NF, 3NF, BCNF",
+        "Decomposition – Lossless Join & Dependency Preservation",
+        "Multivalued Dependencies & 4NF"
+      ],
+      "Transactions & Indexing": [
+        "Transaction Properties – ACID",
+        "Concurrency Control – Serializability, Conflict & View Serializability",
+        "Locking Protocols – 2PL, Deadlock in Transactions",
+        "Recovery – Log-based, Checkpointing, ARIES",
+        "Indexing – B-Tree, B+ Tree, Hashing",
+        "Query Processing & Optimisation Basics"
+      ]
+    },
+    "Computer Networks": {
+      "Physical & Data Link Layer": [
+        "Physical Layer – Signals, Modulation, Encoding Schemes",
+        "Data Link Layer – Framing, Error Detection (CRC, Checksum), Error Correction",
+        "Flow Control – Stop-and-Wait, Sliding Window (Go-Back-N, Selective Repeat)",
+        "MAC Protocols – ALOHA, CSMA/CD, CSMA/CA",
+        "LAN Technologies – Ethernet, Token Ring, Wi-Fi (802.11)"
+      ],
+      "Network Layer": [
+        "IP Addressing – IPv4, IPv6, Subnetting, CIDR",
+        "Routing Algorithms – Dijkstra (Link State), Bellman-Ford (Distance Vector)",
+        "Routing Protocols – OSPF, RIP, BGP",
+        "IP Fragmentation & Reassembly",
+        "NAT, ARP, RARP, ICMP"
+      ],
+      "Transport & Application Layer": [
+        "TCP – Connection Establishment (3-way Handshake), Reliability, Flow Control, Congestion Control",
+        "UDP – Features & Use Cases",
+        "Socket Programming Basics",
+        "Application Layer Protocols – HTTP, HTTPS, FTP, SMTP, DNS, DHCP, SNMP",
+        "Socket Addressing & Port Numbers"
+      ],
+      "Network Security": [
+        "Cryptography – Symmetric (DES, AES) & Asymmetric (RSA)",
+        "Digital Signatures & Certificates",
+        "SSL/TLS & HTTPS",
+        "Firewalls, VPNs & Intrusion Detection Systems"
+      ]
+    },
+    "Software Engineering": {
+      "Software Development Models": [
+        "Waterfall Model",
+        "Agile – Scrum, Extreme Programming",
+        "Spiral Model",
+        "RAD & Incremental Models"
+      ],
+      "Design & Testing": [
+        "Software Requirements – SRS, Use Cases, User Stories",
+        "Software Design – Cohesion, Coupling, Design Patterns",
+        "Testing – Unit, Integration, System, Acceptance Testing",
+        "Black-Box & White-Box Testing",
+        "Software Metrics – Cyclomatic Complexity, Function Points",
+        "Maintenance & Re-engineering"
+      ]
+    }
+  },
+
+  "IBPS RRB PO": {
+    "Preliminary Exam – Reasoning Ability": {
+      "Puzzles & Arrangements": [
+        "Linear Seating Arrangement",
+        "Circular Arrangement",
+        "Floor-based Puzzles",
+        "Scheduling & Month-based Puzzles",
+        "Box, Stack & Bag Puzzles"
+      ],
+      "Verbal Reasoning": [
+        "Syllogism",
+        "Blood Relations",
+        "Coding-Decoding",
+        "Alphanumeric Series",
+        "Direction & Distance"
+      ],
+      "Analytical Reasoning": [
+        "Inequality (Direct & Coded)",
+        "Input-Output",
+        "Data Sufficiency",
+        "Order & Ranking"
+      ]
+    },
+    "Preliminary Exam – Quantitative Aptitude": {
+      "Arithmetic": [
+        "Number System, HCF & LCM",
+        "Simplification & Approximation",
+        "Percentages, Profit & Loss",
+        "Ratio, Proportion & Mixtures",
+        "Time, Speed & Distance",
+        "Time & Work",
+        "Simple & Compound Interest",
+        "Average & Problems on Ages"
+      ],
+      "Data Interpretation & Advanced Maths": [
+        "Tabular DI",
+        "Bar Graph & Line Graph DI",
+        "Pie Chart DI",
+        "Number Series (Missing & Wrong Term)",
+        "Quadratic Equations"
+      ]
+    },
+    "Mains Exam – Reasoning": {
+      "High-Level Reasoning": [
+        "Multi-Dimensional & Multi-Variable Puzzles",
+        "Advanced Syllogism (Possibility Cases)",
+        "Advanced Input-Output",
+        "Machine-based Coding",
+        "Critical Reasoning – Strengthening & Weakening Arguments"
+      ],
+      "Data Sufficiency & Decision Making": [
+        "Numerical Data Sufficiency",
+        "Verbal Data Sufficiency",
+        "Situational Decision Making"
+      ]
+    },
+    "Mains Exam – Quantitative Aptitude": {
+      "DI & Analytical": [
+        "Complex Mixed DI",
+        "Caselet DI",
+        "Data Analysis & Comparison"
+      ],
+      "Advanced Arithmetic & Algebra": [
+        "Partnership & Compound Interest (Complex)",
+        "Probability & Set Theory",
+        "Permutation & Combination",
+        "Statistics – Mean, Median, Mode"
+      ]
+    },
+    "Mains Exam – General Awareness": {
+      "Banking & Financial Awareness": [
+        "RBI – Functions, Monetary Policy & Instruments",
+        "Regional Rural Banks – Structure, Functions, Role",
+        "NABARD – Mission, Schemes, Agricultural Finance",
+        "Priority Sector Lending – Categories & Targets",
+        "Government Banking Schemes (PM Jan Dhan, MUDRA, Kisan Credit Card)",
+        "Financial Inclusion – Business Correspondents, Digital Banking",
+        "NPA & Bad Loan Resolution",
+        "Insurance – IRDAI, Crop & Life Insurance"
+      ],
+      "Current Affairs": [
+        "National & International Events (Last 6 months)",
+        "Government Schemes & Policy Announcements",
+        "Banking & Economy News",
+        "Awards, Appointments & Sports"
+      ],
+      "Static GK": [
+        "Capitals, Currencies & Headquarters",
+        "Important Days & Themes",
+        "Books & Authors",
+        "National Parks & Wildlife Sanctuaries",
+        "Dams, Rivers & Passes of India"
+      ]
+    },
+    "Mains Exam – English / Hindi Language": {
+      "English": [
+        "Reading Comprehension",
+        "Cloze Test",
+        "Error Detection & Sentence Improvement",
+        "Para Jumbles",
+        "Fill in the Blanks – Grammar & Vocabulary"
+      ],
+      "Hindi": [
+        "गद्यांश – पठन बोध",
+        "वाक्य-शुद्धि (Error Detection)",
+        "मुहावरे और लोकोक्तियाँ",
+        "रिक्त स्थान भरना",
+        "विलोम, समानार्थी शब्द"
+      ]
+    },
+    "Mains Exam – Computer Knowledge": {
+      "Computer Fundamentals": [
+        "History & Generations of Computers",
+        "Hardware – CPU, Memory, Input/Output Devices",
+        "Software – System Software, Application Software",
+        "Operating Systems – Windows, Linux Basics",
+        "Memory Types – RAM, ROM, Cache, Secondary Storage"
+      ],
+      "Networking & Internet": [
+        "Internet & its Services – WWW, Email, Search Engines",
+        "Networking Basics – LAN, WAN, MAN, Topologies",
+        "Protocols – HTTP, FTP, TCP/IP, DNS",
+        "Cybersecurity – Viruses, Malware, Firewalls, Phishing"
+      ],
+      "MS Office & Database": [
+        "MS Word – Formatting, Tables, Mail Merge",
+        "MS Excel – Formulas, Functions, Charts, Pivot Tables",
+        "MS PowerPoint – Slides, Animations, Transitions",
+        "Database Basics – DBMS, SQL, Queries"
+      ]
+    }
+  },
+
+  "RBI Grade B": {
+    "Phase 1 – General Awareness": {
+      "Banking & Financial Awareness": [
+        "RBI – History, Structure, Functions & Departments",
+        "Monetary Policy – Tools, Transmission & MPC",
+        "Banking Regulation – RBI Act, Banking Regulation Act",
+        "Types of Banks & NBFCs",
+        "Basel Norms – I, II, III",
+        "NPA Classification, Provisioning & Resolution (IBC, SARFAESI)",
+        "Financial Inclusion – PM Jan Dhan, BC Model",
+        "Payment Systems – UPI, RTGS, NEFT, IMPS",
+        "Capital Markets – SEBI, IPOs, Bonds, Mutual Funds",
+        "Forex & Exchange Rate Management",
+        "Government Securities & Monetary Operations (OMO)",
+        "International Financial Institutions – IMF, World Bank, BIS, FSB"
+      ],
+      "Economy": [
+        "Macroeconomic Indicators – GDP, GNP, NNP, GVA",
+        "Inflation – Types, CPI, WPI, Core Inflation",
+        "Fiscal Policy – Budget, FRBM Act, Deficits",
+        "Balance of Payments & Current Account",
+        "Economic Survey Key Highlights",
+        "FDI & FPI Policy",
+        "Government Schemes – Agriculture, Industry & Infrastructure"
+      ],
+      "Current Affairs": [
+        "National & International Events (Last 12 months)",
+        "RBI Policies & Circulars",
+        "Union Budget & Economic Announcements",
+        "New Appointments – RBI Governor, Bank CMDs, Government Officials",
+        "India's Rankings in Global Indices",
+        "International Trade, Agreements & Summits"
+      ],
+      "Static GK": [
+        "Capitals, Currencies & Central Bank Names",
+        "Important Days & Themes",
+        "Books & Authors",
+        "Science & Technology – Awards & Discoveries",
+        "Headquarters of Financial Institutions"
+      ]
+    },
+    "Phase 1 – English Language": {
+      "Grammar": [
+        "Error Detection & Sentence Correction",
+        "Sentence Improvement",
+        "Fill in the Blanks"
+      ],
+      "Vocabulary": [
+        "Synonyms, Antonyms & Word Usage",
+        "Idioms, Phrases & One-word Substitutions"
+      ],
+      "Comprehension": [
+        "Reading Comprehension (Economy & Financial Passages)",
+        "Cloze Test",
+        "Para Jumbles"
+      ]
+    },
+    "Phase 1 – Quantitative Aptitude": {
+      "Arithmetic & Algebra": [
+        "Number System, Simplification",
+        "Percentages, Profit & Loss",
+        "Ratio, Proportion & Mixtures",
+        "Time, Work, Speed & Distance",
+        "Simple & Compound Interest"
+      ],
+      "Data Interpretation & Statistics": [
+        "Tabular, Bar, Line, Pie DI",
+        "Caselet DI",
+        "Mean, Median, Mode, Standard Deviation",
+        "Probability & Permutation-Combination"
+      ]
+    },
+    "Phase 1 – Reasoning Ability": {
+      "Logical Reasoning": [
+        "Puzzles & Seating Arrangement",
+        "Syllogism & Inequality",
+        "Coding-Decoding",
+        "Blood Relations & Direction Sense",
+        "Input-Output"
+      ],
+      "Analytical & Critical Reasoning": [
+        "Statement-Assumption-Conclusion",
+        "Cause & Effect",
+        "Critical Reasoning – Strengthen / Weaken / Evaluate",
+        "Data Sufficiency"
+      ]
+    },
+    "Phase 2 – Economic & Social Issues (ESI)": {
+      "Growth & Development": [
+        "Economic Growth vs Development – Indicators & Measurement",
+        "Sustainable Development & SDGs",
+        "Human Development Index & Multidimensional Poverty",
+        "Inclusive Growth & Inequality – Gini Coefficient, Lorenz Curve",
+        "Economic Planning in India – From Five Year Plans to NITI Aayog"
+      ],
+      "Indian Economy – Sectoral Analysis": [
+        "Agriculture – Land Reforms, MSP, Crop Insurance, e-NAM",
+        "Industry – MSMEs, Industrial Policy, PLI Scheme",
+        "Services Sector – IT, Telecom, Finance, Tourism",
+        "Infrastructure – Roads, Railways, Ports, Energy",
+        "Public Finance – Revenue, Expenditure, Tax Reforms, GST"
+      ],
+      "Monetary & Financial System": [
+        "Money Supply & Monetary Aggregates (M0, M1, M2, M3)",
+        "Banking System – Structure, Role & Reforms",
+        "Capital Market – Equity, Debt, Derivatives",
+        "Insurance & Pension – IRDAI, PFRDA, NPS",
+        "Foreign Trade Policy & EXIM Bank"
+      ],
+      "Globalisation & International Economy": [
+        "WTO & Trade Agreements",
+        "Globalisation – Effects on India",
+        "Foreign Exchange – Convertibility, FEMA",
+        "India's External Debt & Sovereign Ratings",
+        "Special Drawing Rights (SDR) & IMF Mechanisms"
+      ],
+      "Social Issues": [
+        "Poverty & Unemployment – Types, Measurement & Programmes",
+        "Social Security – MGNREGA, PM-KISAN, PM-JAY",
+        "Education – NEP 2020, Literacy & Challenges",
+        "Health – NHM, POSHAN, NITI Aayog Health Index",
+        "Gender Issues – Women Empowerment, Gender Gap Index",
+        "Urbanisation & Smart Cities"
+      ]
+    },
+    "Phase 2 – Finance & Management (FM)": {
+      "Financial System & Markets": [
+        "Indian Financial System – Structure & Participants",
+        "Money Market – Instruments (T-Bills, CPs, CDs, Repo)",
+        "Capital Market – Primary (IPO, FPO, Rights Issue) & Secondary",
+        "Government Securities Market – G-Secs, SDL, T-Bills",
+        "Derivatives Market – Futures, Options, Swaps",
+        "Forex Market – Exchange Rates, Hedging, ECB"
+      ],
+      "Financial Management": [
+        "Time Value of Money – PV, FV, Annuities",
+        "Capital Budgeting – NPV, IRR, Payback Period",
+        "Cost of Capital & WACC",
+        "Capital Structure – Leverage, Modigliani-Miller Theorem",
+        "Working Capital Management",
+        "Dividend Policy",
+        "Risk & Return – CAPM, Beta, Portfolio Theory"
+      ],
+      "Accounting & Auditing": [
+        "Financial Statements – Balance Sheet, P&L, Cash Flow",
+        "Ratio Analysis",
+        "Fund Flow & Cash Flow Analysis",
+        "Auditing Concepts – Internal & External Audit",
+        "International Financial Reporting Standards (IFRS) vs Indian GAAP"
+      ],
+      "Management Principles": [
+        "Theories of Management – Taylor, Fayol, Maslow, McGregor",
+        "Organisational Structures & Culture",
+        "Leadership & Motivation Theories",
+        "Strategic Management – SWOT, Porter's Five Forces",
+        "Change Management & Innovation",
+        "Human Resource Management – Recruitment, Training, Appraisal"
+      ]
+    }
+  }
+}

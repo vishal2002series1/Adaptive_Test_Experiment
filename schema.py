@@ -4,6 +4,19 @@ from datetime import datetime, timezone
 import operator
 
 # ==========================================
+# 0. NEW: STRUCTURED ANALYTICS MODELS
+# ==========================================
+
+class ProficiencyRecord(BaseModel):
+    """Replaces the flat dictionary to enable SQL-style analytics on DynamoDB"""
+    subject: str
+    topic: str
+    sub_topic: str
+    score: float = 0.0
+    questions_attempted: int = 0
+    last_tested: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+# ==========================================
 # 1. PYDANTIC MODELS (Database & Validation)
 # ==========================================
 
@@ -12,16 +25,17 @@ class QuestionMetadata(BaseModel):
     subject: str = Field(description="Broad subject, e.g., Economy, Science & Tech")
     topic: str
     sub_topic: str
+    
+    # NEW: The Escape Hatch Tracker
+    taxonomy_source: str = Field(default="official", description="'official' if from S3 JSON, 'llm_generated' if invented via escape hatch")
+    
     cognitive_skill: str = Field(description="e.g., Factual Recall, Analytical Reasoning")
     difficulty_level: int = Field(ge=1, le=5, description="1 (Beginner) to 5 (Exam-Ready)")
     ttl_days: Optional[int] = Field(default=None, description="Time-to-live in days. None for static subjects.")
-    
-    # FIX: Changed to an ISO string to prevent AWS Lambda "datetime not JSON serializable" crashes!
     generation_date: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class Question(BaseModel):
     id: str
-    # FIX: Natively supports Reading Comprehension / Grouped passages!
     shared_context: Optional[str] = Field(default=None, description="The shared passage or dataset if this question belongs to a group. Otherwise null.")
     text: str = Field(description="The question text. MUST use $ for inline math (e.g. $V$) and $$ for block math.")
     options: Dict[str, str] = Field(description="e.g., {'A': '...', 'B': '...'}. MUST use $ for math.")
@@ -36,9 +50,11 @@ class StudentProfile(BaseModel):
     overall_readiness_score: float = 0.0
     
     explored_topics: List[str] = Field(default_factory=list) 
-    topic_proficiencies: Dict[str, float] = {}
-    seen_question_counts: Dict[str, int] = {}
     
+    # UPGRADED: Structured Analytics Array
+    proficiencies: List[ProficiencyRecord] = Field(default_factory=list)
+    
+    seen_question_counts: Dict[str, int] = {}
     last_study_plan: Optional[str] = None
 
 class TestConfig(BaseModel):
@@ -54,8 +70,12 @@ class TestConfig(BaseModel):
 # ==========================================
 
 class BlueprintRequirement(BaseModel):
-    topic: str = Field(description="The specific topic to test.")
-    quantity: int = Field(description="Number of questions for this topic.")
+    # UPGRADED: Forcing the Planner to output the strict 3-tier hierarchy
+    subject: str = Field(description="The broad subject area.")
+    topic: str = Field(description="The specific topic.")
+    sub_topic: str = Field(description="The granular sub-topic to test.")
+    
+    quantity: int = Field(description="Number of questions for this node.")
     target_difficulty: int = Field(description="Difficulty level 1-5 based on student history.")
     question_type: str = Field(default="Standard", description="'Standard', 'Reading Comprehension', 'Data Interpretation', etc.")
     requires_shared_context: bool = Field(default=False, description="True if these questions must share a single comprehensive passage, dataset, or case-study.")

@@ -1,12 +1,12 @@
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from langgraph.graph import StateGraph, END
 
-from schema import EvaluationState
+from schema import EvaluationState, ProficiencyRecord
 from db import save_student_profile
 
 load_dotenv()
@@ -61,6 +61,7 @@ def grader_node(state: EvaluationState) -> dict:
             
         graded_results.append({
             "question_id": q.id,
+            "subject": q.metadata.subject,      # Added Subject
             "topic": q.metadata.topic,
             "sub_topic": q.metadata.sub_topic,
             "difficulty": q.metadata.difficulty_level,
@@ -81,8 +82,8 @@ def grader_node(state: EvaluationState) -> dict:
     }
 
 def profiler_node(state: EvaluationState) -> dict:
-    """Updates the student's proficiency metrics and calculates score deltas."""
-    print("📈 Profiler: Updating student knowledge graph...")
+    """Updates the structured DynamoDB array and calculates score deltas."""
+    print("📈 Profiler: Updating structured NoSQL analytics array...")
     
     profile = state["profile"]
     graded_results = state.get("graded_results", [])
@@ -90,22 +91,41 @@ def profiler_node(state: EvaluationState) -> dict:
     profile.tests_taken += 1
     
     for result in graded_results:
+        subject = result["subject"]
         topic = result["topic"]
+        sub_topic = result["sub_topic"]
         difficulty = result["difficulty"]
-        current_prof = profile.topic_proficiencies.get(topic, 0.5) 
         
+        # 1. Search for existing ProficiencyRecord in the array
+        existing_record = next((p for p in profile.proficiencies if p.sub_topic == sub_topic), None)
+        
+        # 2. Calculate Math Delta
         if result["is_correct"]:
-            boost = 0.05 * difficulty 
-            profile.topic_proficiencies[topic] = min(1.0, current_prof + boost)
-            result["score_delta"] = f"+{boost:.3f}"
+            score_delta = 0.05 * difficulty 
+            result["score_delta"] = f"+{score_delta:.3f}"
         else:
-            penalty = 0.1 / difficulty 
-            profile.topic_proficiencies[topic] = max(0.0, current_prof - penalty)
-            result["score_delta"] = f"-{penalty:.3f}"
+            score_delta = -(0.1 / difficulty) 
+            result["score_delta"] = f"{score_delta:.3f}"
             
-    if profile.topic_proficiencies:
-        total_prof = sum(profile.topic_proficiencies.values())
-        profile.overall_readiness_score = total_prof / len(profile.topic_proficiencies)
+        # 3. Update or Create
+        if existing_record:
+            existing_record.score = max(0.0, min(1.0, existing_record.score + score_delta))
+            existing_record.questions_attempted += 1
+            existing_record.last_tested = datetime.now(timezone.utc).isoformat()
+        else:
+            new_record = ProficiencyRecord(
+                subject=subject,
+                topic=topic,
+                sub_topic=sub_topic,
+                score=max(0.0, min(1.0, 0.5 + score_delta)), # Base 0.5 start
+                questions_attempted=1
+            )
+            profile.proficiencies.append(new_record)
+            
+    # 4. Update overall score across all records
+    if profile.proficiencies:
+        total_prof = sum(p.score for p in profile.proficiencies)
+        profile.overall_readiness_score = total_prof / len(profile.proficiencies)
         
     save_student_profile(profile)
     
@@ -133,7 +153,8 @@ def strategist_node(state: EvaluationState) -> dict:
         
     mistakes_context = ""
     for m in mistakes:
-        mistakes_context += f"- Topic: {m['topic']} ({m['sub_topic']})\n"
+        # Inject the full 3-tier string so the LLM understands the exact context
+        mistakes_context += f"- Taxonomy: {m['subject']} > {m['topic']} > {m['sub_topic']}\n"
         mistakes_context += f"  Fact missed: {m['explanation']}\n\n"
         
     history_context = f"Total Tests Taken: {profile.tests_taken}\n"
@@ -172,10 +193,9 @@ def strategist_node(state: EvaluationState) -> dict:
         print(f"❌ Strategist error: {e}")
         study_plan = "Study plan generation temporarily unavailable."
 
-    # --- PERMANENT MEMORY INJECTION ---
     print("💾 Strategist: Saving Study Plan to DynamoDB Memory...")
     profile.last_study_plan = study_plan
-    save_student_profile(profile) # Commits to the new field we added in schema.py!
+    save_student_profile(profile) 
 
     save_test_history_locally(profile.student_id, profile.target_exam, score_percentage, graded_results, study_plan)
 
