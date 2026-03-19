@@ -191,10 +191,13 @@ def database_retriever_node(state: AdaptiveTestState) -> dict:
                 break 
                 
             current_exclude_ids = existing_ids + seen_history + [fq.id for fq in found_questions]
+            
+            # CRITICAL FIX: Passing target_sub_topic so the Retriever can actually find the saved questions!
             q = retrieve_best_question(
                 target_exam=state["profile"].target_exam,
                 target_subject=req.subject,
                 target_topic=req.topic,  
+                target_sub_topic=req.sub_topic, # <--- THE FIX
                 target_difficulty=req.target_difficulty,
                 student_profile=state["profile"],
                 exclude_ids=current_exclude_ids

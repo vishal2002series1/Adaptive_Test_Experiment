@@ -172,7 +172,8 @@ def _index_question(client, q: Question, vector: List[float] = None):
 def retrieve_best_question(
     target_exam: str, 
     target_subject: str, 
-    target_topic: str, # Note: Passed but we rely on sub_topic for tight granularity now
+    target_topic: str, 
+    target_sub_topic: str, # <-- NEW: Pass the 3rd tier!
     target_difficulty: int,
     student_profile: StudentProfile,
     exclude_ids: List[str]
@@ -180,24 +181,29 @@ def retrieve_best_question(
     client = get_opensearch_client()
     if not client or not client.indices.exists(index=INDEX_NAME): return None
 
-    # We now filter strictly by sub_topic to match the 3-tier architecture
+    # We now filter strictly by the exact 3-tier match
     query = {
         "size": 1,
         "query": {
             "bool": {
                 "must": [
-                    {"term": {"exam": target_exam}},
-                    {"term": {"subject": target_subject}}
+                    {"term": {"exam": target_exam}}
                 ],
                 "must_not": [{"terms": {"id": exclude_ids}}]
             }
         }
     }
     
-    if target_topic != "All Syllabus" and target_topic != "General":
-         # In the real system, you would pass target_sub_topic here from the blueprint req.
-         # For backwards compatibility with the planner node call, we map topic -> sub_topic field
-         query["query"]["bool"]["must"].append({"term": {"sub_topic": target_topic}})
+    if target_subject and target_subject not in ["All Syllabus", "Entire Syllabus"]:
+        query["query"]["bool"]["must"].append({"term": {"subject": target_subject}})
+        
+    if target_topic and target_topic not in ["All Syllabus", "General"]:
+        query["query"]["bool"]["must"].append({"term": {"topic": target_topic}})
+        
+    if target_sub_topic and target_sub_topic not in ["All Syllabus", "General"]:
+        # CRITICAL FIX: Match the EXACT case (.title()) that was saved by the Generator
+        clean_sub_topic = str(target_sub_topic).strip().title()
+        query["query"]["bool"]["must"].append({"term": {"sub_topic": clean_sub_topic}})
 
     try:
         response = client.search(index=INDEX_NAME, body=query)
@@ -206,12 +212,13 @@ def retrieve_best_question(
             source = hits[0]['_source']
             source.pop('embedding', None)
             
-            # Clean up flattened root fields before reconstructing the Pydantic model
-            for field in ['exam', 'subject', 'topic', 'sub_topic', 'taxonomy_source', 'difficulty', 'correct_answer']:
+            # 👉 THE FIX: 'correct_answer' has been removed from this list
+            for field in ['exam', 'subject', 'topic', 'sub_topic', 'taxonomy_source', 'difficulty']:
                 source.pop(field, None)
                 
             return Question(**source)
     except Exception as e:
+        print(f"⚠️ Retriever Search Error: {e}")
         pass
         
     return None

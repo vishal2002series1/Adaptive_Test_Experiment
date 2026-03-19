@@ -8,8 +8,10 @@ COPY requirements.txt ${LAMBDA_TASK_ROOT}
 RUN pip install -r requirements.txt
 
 # Copy all your Python files into the container
-# COPY schema.py vector_store.py graph.py app.py ${LAMBDA_TASK_ROOT}/
 COPY *.py ${LAMBDA_TASK_ROOT}/
+
+# 👉 ADD THIS LINE: Copy the syllabus map into the Lambda root
+COPY syllabus_maps.json ${LAMBDA_TASK_ROOT}/
 
 # Set the entrypoint to the lambda_handler function inside app.py
 CMD [ "app.lambda_handler" ]

@@ -61,7 +61,7 @@ def grader_node(state: EvaluationState) -> dict:
             
         graded_results.append({
             "question_id": q.id,
-            "subject": q.metadata.subject,      # Added Subject
+            "subject": q.metadata.subject,      
             "topic": q.metadata.topic,
             "sub_topic": q.metadata.sub_topic,
             "difficulty": q.metadata.difficulty_level,
@@ -91,10 +91,14 @@ def profiler_node(state: EvaluationState) -> dict:
     profile.tests_taken += 1
     
     for result in graded_results:
+        question_id = result["question_id"]
         subject = result["subject"]
         topic = result["topic"]
         sub_topic = result["sub_topic"]
         difficulty = result["difficulty"]
+        
+        # 👉 THE FIX: Mark this specific question ID as "seen" so the Retriever ignores it forever
+        profile.seen_question_counts[question_id] = profile.seen_question_counts.get(question_id, 0) + 1
         
         # 1. Search for existing ProficiencyRecord in the array
         existing_record = next((p for p in profile.proficiencies if p.sub_topic == sub_topic), None)
