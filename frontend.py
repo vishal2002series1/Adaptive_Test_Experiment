@@ -3,6 +3,7 @@ import requests
 import json
 import threading
 import time
+from datetime import datetime
 
 # Safely import Streamlit's context manager for background threading
 try:
@@ -27,6 +28,14 @@ def format_latex(text):
     text = text.replace(r'\wedge', '^')
     text = text.replace(r'\{', '{').replace(r'\}', '}')
     return text
+
+def parse_iso_date(iso_str):
+    """Helper to convert ISO string to readable format"""
+    try:
+        dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+        return dt.strftime("%B %d, %Y at %I:%M %p")
+    except:
+        return iso_str
 
 # --- DYNAMIC LOADER THREAD ---
 def update_loading_text(placeholder, stop_event):
@@ -57,159 +66,244 @@ if 'student_profile' not in st.session_state:
     st.session_state.student_profile = {}
 if 'fetched_profile_data' not in st.session_state:
     st.session_state.fetched_profile_data = None
+if 'history_logs' not in st.session_state:
+    st.session_state.history_logs = []
 
 # ==========================================
-# PHASE 1: SETUP & CONFIGURATION
+# UI NAVIGATION TABS
 # ==========================================
+# We only show tabs if we are in the setup phase
 if st.session_state.phase == 'setup':
-    st.title("📚 AI Adaptive Test Engine")
-    
-    st.subheader("1. User Profile")
-    col1, col2 = st.columns(2)
-    with col1:
-        student_id = st.text_input("Student ID", value="Physics Student V2")
-    with col2:
-        # EXACT MATCH TO JSON KEYS: Ensure these match the top-level keys in syllabus_maps.json!
-        exam_preset = st.selectbox("Target Exam", ["UPSC CSE Prelims", "UPSC CSE Mains", "SSC CGL", "IBPS PO", "IBPS RRB PO", "RBI Grade B", "GATE CSE", "Custom Exam..."])
-        if exam_preset == "Custom Exam...":
-            target_exam = st.text_input("Enter Custom Exam Name", value="CAT Exam")
+    tab_setup, tab_history = st.tabs(["🚀 Take a Test", "📂 Test History"])
+else:
+    # Dummy context managers so the rest of the code works without indenting everything
+    from contextlib import nullcontext
+    tab_setup = nullcontext()
+    tab_history = nullcontext()
+
+# ==========================================
+# PHASE 1: SETUP & CONFIGURATION (Inside Tab 1)
+# ==========================================
+with tab_setup:
+    if st.session_state.phase == 'setup':
+        st.title("📚 AI Adaptive Test Engine")
+        
+        st.subheader("1. User Profile")
+        col1, col2 = st.columns(2)
+        with col1:
+            student_id = st.text_input("Student ID", value="Physics Student V2")
+        with col2:
+            exam_preset = st.selectbox("Target Exam", ["UPSC CSE Prelims", "UPSC CSE Mains", "SSC CGL", "IBPS PO", "IBPS RRB PO", "RBI Grade B", "GATE CSE", "Custom Exam..."])
+            if exam_preset == "Custom Exam...":
+                target_exam = st.text_input("Enter Custom Exam Name", value="CAT Exam")
+            else:
+                target_exam = exam_preset
+
+        st.divider()
+
+        st.subheader("2. Testing Mode")
+        adaptive_mode = st.toggle("Enable Adaptive Learning Mode", value=True)
+        
+        target_subject = "Entire Syllabus"
+        target_topic = "All Syllabus"
+        target_difficulty = 3
+        num_questions = 5
+        selected_override_topics = []
+
+        if not adaptive_mode:
+            st.info("Manual Mode: Select exactly what you want to study.")
+            col3, col4 = st.columns(2)
+            with col3:
+                target_subject = st.text_input("Target Subject", value="Quantitative Aptitude")
+                target_topic = st.text_input("Target Topic", value="Arithmetic")
+            with col4:
+                target_difficulty = st.slider("Difficulty Level", 1, 5, 3)
+                num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
+        
         else:
-            target_exam = exam_preset
+            st.success("Adaptive Mode: The AI will target your weak areas across the ENTIRE exam.")
+            
+            use_specific_subject = st.checkbox("I want to target a specific subject (Optional)")
+            if use_specific_subject:
+                target_subject = st.text_input("Broad Target Subject", value="Quantitative Aptitude", help="Tell the AI to strictly focus on this specific subject within the exam.")
+            
+            col_diff, col_num = st.columns(2)
+            with col_diff:
+                manual_difficulty = st.checkbox("Set Difficulty Manually")
+                if manual_difficulty:
+                    target_difficulty = st.slider("Difficulty Level", 1, 5, 3)
+                else:
+                    target_difficulty = None
+                    st.info("🧠 AI will dynamically set difficulty per topic.")
+                    
+            with col_num:
+                num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
 
-    st.divider()
+            if st.button("🔍 Load My Learning Profile", type="secondary"):
+                with st.spinner("Fetching historical data..."):
+                    payload = {
+                        "action": "get_profile",
+                        "student_profile": {"student_id": student_id, "target_exam": target_exam}
+                    }
+                    try:
+                        res = requests.post(API_URL, json=payload, timeout=30)
+                        if res.status_code == 200:
+                            st.session_state.fetched_profile_data = res.json().get('profile', {})
+                        else:
+                            st.error(f"Failed to load profile: {res.text}")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
 
-    st.subheader("2. Testing Mode")
-    adaptive_mode = st.toggle("Enable Adaptive Learning Mode", value=True)
-    
-    target_subject = "Entire Syllabus"
-    target_topic = "All Syllabus"
-    target_difficulty = 3
-    num_questions = 5
-    selected_override_topics = []
+            if st.session_state.fetched_profile_data:
+                prof_data = st.session_state.fetched_profile_data
+                proficiencies = prof_data.get('proficiencies', [])
+                
+                st.markdown("### 📊 Your Progress Dashboard")
+                st.metric("Total Tests Taken", prof_data.get('tests_taken', 0))
+                st.progress(prof_data.get('overall_readiness_score', 0.0), text=f"Overall Exam Readiness: {prof_data.get('overall_readiness_score', 0.0):.2f}/1.0")
+                
+                last_plan = prof_data.get('last_study_plan')
+                if last_plan:
+                    with st.expander("📝 View Previous AI Study Plan", expanded=False):
+                        st.markdown(last_plan)
+                
+                if not proficiencies:
+                    st.info("No historical topics found for this exam. The AI will start exploring new topics for you!")
+                else:
+                    st.markdown("#### Sub-Topic Mastery & Next Test Selection")
+                    st.write("Review your progress. The AI has pre-selected your 3 weakest sub-topics to focus on next, but you can change them.")
+                    
+                    sorted_profs = sorted(proficiencies, key=lambda x: x.get('score', 0.0))
+                    auto_select_topics = [p.get('sub_topic') for p in sorted_profs[:3]]
+                    
+                    for p in proficiencies:
+                        sub_topic = p.get('sub_topic', 'Unknown')
+                        topic = p.get('topic', 'Unknown')
+                        score = p.get('score', 0.0)
+                        attempts = p.get('questions_attempted', 0)
+                        
+                        col_chk, col_prog = st.columns([1, 4])
+                        with col_chk:
+                            is_checked = st.checkbox(f"{sub_topic}", value=(sub_topic in auto_select_topics), key=f"chk_{sub_topic}")
+                            if is_checked:
+                                selected_override_topics.append(sub_topic)
+                        with col_prog:
+                            st.progress(score, text=f"{topic} > {sub_topic} | Score: {score:.2f} ({attempts} Qs)")
 
-    if not adaptive_mode:
-        st.info("Manual Mode: Select exactly what you want to study.")
-        col3, col4 = st.columns(2)
-        with col3:
-            target_subject = st.text_input("Target Subject", value="Quantitative Aptitude")
-            target_topic = st.text_input("Target Topic", value="Arithmetic")
-        with col4:
-            target_difficulty = st.slider("Difficulty Level", 1, 5, 3)
-            num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
-    
-    else:
-        st.success("Adaptive Mode: The AI will target your weak areas across the ENTIRE exam.")
+        st.divider()
+        if st.button("Generate Test 🚀", use_container_width=True, type="primary"):
+            status_placeholder = st.empty()
+            stop_event = threading.Event()
+            
+            if add_script_run_ctx:
+                t = threading.Thread(target=update_loading_text, args=(status_placeholder, stop_event))
+                add_script_run_ctx(t)
+                t.start()
+            else:
+                status_placeholder.info("⏳ AI Agents are collaborating to build your test...")
+                
+            payload = {
+                "action": "generate",
+                "student_profile": {
+                    "student_id": student_id,
+                    "target_exam": target_exam
+                },
+                "test_config": {
+                    "target_subject": target_subject,
+                    "target_topic": target_topic if not adaptive_mode else "Auto-Selected",
+                    "target_difficulty": target_difficulty,
+                    "num_questions": num_questions,
+                    "adaptive_mode": adaptive_mode,
+                    "override_topics": selected_override_topics if adaptive_mode else None 
+                }
+            }
+            
+            try:
+                response = requests.post(API_URL, json=payload, timeout=900)
+                stop_event.set()
+                status_placeholder.empty()
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    st.session_state.questions = data.get("questions", [])
+                    st.session_state.student_profile = payload["student_profile"]
+                    st.session_state.user_answers = {} 
+                    st.session_state.phase = 'testing'
+                    st.rerun()
+                else:
+                    st.error(f"Test Generation Failed: {response.json().get('error', response.text)}")
+            except Exception as e:
+                stop_event.set()
+                status_placeholder.empty()
+                st.error(f"Connection Error: {e}")
+
+# ==========================================
+# PHASE 1.5: HISTORY TAB
+# ==========================================
+with tab_history:
+    if st.session_state.phase == 'setup':
+        st.title("📂 Your Past Tests")
+        st.write("Review your historical performance and analyze past mistakes.")
         
-        use_specific_subject = st.checkbox("I want to target a specific subject (Optional)")
-        if use_specific_subject:
-            target_subject = st.text_input("Broad Target Subject", value="Quantitative Aptitude", help="Tell the AI to strictly focus on this specific subject within the exam.")
-        
-        col_diff, col_num = st.columns(2)
-        with col_diff:
-            target_difficulty = st.slider("Difficulty Level", 1, 5, 3)
-        with col_num:
-            num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
-
-        if st.button("🔍 Load My Learning Profile", type="secondary"):
-            with st.spinner("Fetching historical data..."):
+        hist_col1, hist_col2 = st.columns([3, 1])
+        with hist_col1:
+            history_student_id = st.text_input("Enter Student ID to fetch history", value=student_id, key="hist_id")
+        with hist_col2:
+            st.write("") # spacing
+            st.write("") # spacing
+            fetch_history_btn = st.button("Fetch History 🔍", use_container_width=True)
+            
+        if fetch_history_btn:
+            with st.spinner("Fetching test logs from DynamoDB..."):
                 payload = {
-                    "action": "get_profile",
-                    "student_profile": {"student_id": student_id, "target_exam": target_exam}
+                    "action": "get_history",
+                    "student_profile": {"student_id": history_student_id}
                 }
                 try:
                     res = requests.post(API_URL, json=payload, timeout=30)
                     if res.status_code == 200:
-                        st.session_state.fetched_profile_data = res.json().get('profile', {})
+                        st.session_state.history_logs = res.json().get('history', [])
+                        if not st.session_state.history_logs:
+                            st.info("No test history found for this Student ID.")
                     else:
-                        st.error(f"Failed to load profile: {res.text}")
+                        st.error(f"Failed to load history: {res.text}")
                 except Exception as e:
                     st.error(f"Connection error: {e}")
-
-        if st.session_state.fetched_profile_data:
-            prof_data = st.session_state.fetched_profile_data
-            
-            # UPGRADED: Read the new structured array instead of the old flat dictionary
-            proficiencies = prof_data.get('proficiencies', [])
-            
-            st.markdown("### 📊 Your Progress Dashboard")
-            st.metric("Total Tests Taken", prof_data.get('tests_taken', 0))
-            st.progress(prof_data.get('overall_readiness_score', 0.0), text=f"Overall Exam Readiness: {prof_data.get('overall_readiness_score', 0.0):.2f}/1.0")
-            
-            if not proficiencies:
-                st.info("No historical topics found for this exam. The AI will start exploring new topics for you!")
-            else:
-                st.markdown("#### Sub-Topic Mastery & Next Test Selection")
-                st.write("Review your progress. The AI has pre-selected your 3 weakest sub-topics to focus on next, but you can change them.")
-                
-                # Sort the array of dictionaries by score
-                sorted_profs = sorted(proficiencies, key=lambda x: x.get('score', 0.0))
-                auto_select_topics = [p.get('sub_topic') for p in sorted_profs[:3]]
-                
-                for p in proficiencies:
-                    sub_topic = p.get('sub_topic', 'Unknown')
-                    topic = p.get('topic', 'Unknown')
-                    score = p.get('score', 0.0)
-                    attempts = p.get('questions_attempted', 0)
                     
-                    col_chk, col_prog = st.columns([1, 4])
-                    with col_chk:
-                        is_checked = st.checkbox(f"{sub_topic}", value=(sub_topic in auto_select_topics), key=f"chk_{sub_topic}")
-                        if is_checked:
-                            selected_override_topics.append(sub_topic)
-                    with col_prog:
-                        st.progress(score, text=f"{topic} > {sub_topic} | Score: {score:.2f} ({attempts} Qs)")
-
-    st.divider()
-    if st.button("Generate Test 🚀", use_container_width=True, type="primary"):
-        status_placeholder = st.empty()
-        stop_event = threading.Event()
-        
-        if add_script_run_ctx:
-            t = threading.Thread(target=update_loading_text, args=(status_placeholder, stop_event))
-            add_script_run_ctx(t)
-            t.start()
-        else:
-            status_placeholder.info("⏳ AI Agents are collaborating to build your test...")
-            
-        payload = {
-            "action": "generate",
-            "student_profile": {
-                "student_id": student_id,
-                "target_exam": target_exam
-            },
-            "test_config": {
-                "target_subject": target_subject,
-                "target_topic": target_topic if not adaptive_mode else "Auto-Selected",
-                "target_difficulty": target_difficulty,
-                "num_questions": num_questions,
-                "adaptive_mode": adaptive_mode,
-                "override_topics": selected_override_topics if adaptive_mode else None 
-            }
-        }
-        
-        try:
-            response = requests.post(API_URL, json=payload, timeout=900)
-            stop_event.set()
-            status_placeholder.empty()
-            
-            if response.status_code == 200:
-                data = response.json()
-                st.session_state.questions = data.get("questions", [])
-                st.session_state.student_profile = payload["student_profile"]
-                st.session_state.user_answers = {} 
-                st.session_state.phase = 'testing'
-                st.rerun()
-            else:
-                st.error(f"Test Generation Failed: {response.json().get('error', response.text)}")
-        except Exception as e:
-            stop_event.set()
-            status_placeholder.empty()
-            st.error(f"Connection Error: {e}")
+        if st.session_state.history_logs:
+            st.divider()
+            for index, log in enumerate(st.session_state.history_logs):
+                exam_name = log.get('exam', 'Unknown Exam')
+                score = log.get('score_percentage', 0)
+                date_str = parse_iso_date(log.get('timestamp', ''))
+                
+                with st.expander(f"📝 {exam_name} - {date_str} (Score: {score}%)"):
+                    
+                    if log.get('study_plan'):
+                        st.markdown("**AI Study Plan Provided:**")
+                        st.info(log.get('study_plan'))
+                        
+                    st.markdown("**Questions & Answers:**")
+                    for q_idx, result in enumerate(log.get('graded_results', [])):
+                        
+                        question_text = result.get('text', 'Question text missing')
+                        is_correct = result.get('is_correct', False)
+                        icon = "✅" if is_correct else "❌"
+                        
+                        st.markdown(f"**Q{q_idx+1}.** {format_latex(question_text)}")
+                        st.write(f"{icon} **Your Answer:** {result.get('student_answer')} | **Correct Answer:** {result.get('correct_answer')}")
+                        
+                        st.caption(f"Taxonomy: {result.get('subject')} > {result.get('topic')} > {result.get('sub_topic')} | Difficulty: {result.get('difficulty')}")
+                        
+                        with st.popover("Show Explanation"):
+                            st.markdown(format_latex(result.get('explanation', 'No explanation provided.')))
+                        
+                        st.divider()
 
 # ==========================================
 # PHASE 2: TEST TAKING
 # ==========================================
-elif st.session_state.phase == 'testing':
+if st.session_state.phase == 'testing':
     st.title(f"📝 {st.session_state.student_profile['target_exam']} Test")
     st.write("Please answer the following questions.")
     st.divider()
@@ -294,7 +388,6 @@ elif st.session_state.phase == 'results':
             
             st.markdown(f"**Explanation:** {format_latex(original_q['explanation'])}")
             
-            # UPGRADED: Display the 3-Tier mapping in the results!
             if original_q:
                 meta = original_q.get('metadata', {})
                 st.caption(f"Taxonomy: {meta.get('subject', 'N/A')} > {meta.get('topic', 'N/A')} > {meta.get('sub_topic', 'N/A')} | Source: {meta.get('taxonomy_source', 'N/A')}")
@@ -307,4 +400,5 @@ elif st.session_state.phase == 'results':
         st.session_state.user_answers = {}
         st.session_state.evaluation = None
         st.session_state.fetched_profile_data = None 
+        st.session_state.history_logs = []
         st.rerun()

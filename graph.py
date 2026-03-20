@@ -58,26 +58,40 @@ def planner_node(state: AdaptiveTestState) -> dict:
     config = state["config"]
     blueprint = state.get("blueprint")
     
-    # 1. Load and Slice the JSON Map to save Tokens!
     full_syllabus_map = load_syllabus_map()
     exam_map = full_syllabus_map.get(profile.target_exam, {})
     
     if not blueprint:
         print(f"🧭 Planner: Assembling strict 3-tier blueprint for {profile.target_exam}...")
         
-        # 2. Extract History from the NEW Structured Analytics Schema
         explored_subtopics = profile.explored_topics
         sorted_profs = sorted(profile.proficiencies, key=lambda x: x.score)
         weakest_subtopics = [p.sub_topic for p in sorted_profs[:3]] if sorted_profs else []
+        
+        prof_summary = {p.sub_topic: round(p.score, 2) for p in profile.proficiencies}
         
         planner_context = f"""
         OFFICIAL EXAM SYLLABUS MAP:
         {json.dumps(exam_map, indent=2) if exam_map else "No official map provided. Rely on your knowledge."}
         
-        STUDENT HISTORY:
+        STUDENT HISTORY (Sub-Topic : Current Score):
+        {prof_summary if prof_summary else "No history yet. Student is a blank slate."}
+        
         - Weakest Sub-Topics (Needs Exploitation): {weakest_subtopics if weakest_subtopics else "None yet"}
         - Already Explored Sub-Topics: {explored_subtopics if explored_subtopics else "None yet"}
         """
+        
+        if config.target_difficulty is not None:
+            dynamic_diff_text = f"MANUAL DIFFICULTY OVERRIDE: Apply Difficulty Level {config.target_difficulty} (Scale 1-5) strictly to ALL generated requirements."
+        else:
+            dynamic_diff_text = """
+            DYNAMIC ADAPTIVE DIFFICULTY RULES:
+            You MUST calculate the 'target_difficulty' (integer 1 to 5) for EACH requirement based on the student's current score for that specific sub-topic:
+            - Score 0.00 to 0.35 -> Difficulty 1 or 2 (Foundational)
+            - Score 0.36 to 0.70 -> Difficulty 3 (Intermediate)
+            - Score 0.71 to 1.00 -> Difficulty 4 or 5 (Advanced)
+            - If the sub-topic is completely NEW (Exploration), assign Difficulty 1 or 2.
+            """
         
         if config.adaptive_mode:
             planner_context += f"""
@@ -101,7 +115,7 @@ def planner_node(state: AdaptiveTestState) -> dict:
         
         {planner_context}
         
-        Requested Base Difficulty: {config.target_difficulty} (Scale 1-5).
+        {dynamic_diff_text}
         
         Determine if a topic requires standard discrete questions, or if it requires grouped context (like Reading Comprehension, Data Interpretation, or Case Studies). 
         If it requires grouped context, set "requires_shared_context" to true.
@@ -118,7 +132,7 @@ def planner_node(state: AdaptiveTestState) -> dict:
                     "target_difficulty": 4,
                     "question_type": "Standard",
                     "requires_shared_context": false,
-                    "reasoning": "Targeting student weakness"
+                    "reasoning": "Targeting student weakness. Score is 0.85, so assigning Level 4."
                 }}
             ]
         }}
@@ -132,7 +146,6 @@ def planner_node(state: AdaptiveTestState) -> dict:
             )
             blueprint = TestBlueprint(**json.loads(clean_json_response(response.text)))
             
-            # Math Validation Guardrail
             total_reqs = sum(req.quantity for req in blueprint.requirements)
             if total_reqs != config.num_questions:
                 print(f"⚠️ Planner Math Correction: Forcing {total_reqs} to {config.num_questions}.")
@@ -142,23 +155,32 @@ def planner_node(state: AdaptiveTestState) -> dict:
             print(f"📋 Blueprint Created: {blueprint.overall_strategy}")
         except Exception as e:
             print(f"❌ Planner failed: {e}. Falling back.")
+            fallback_diff = config.target_difficulty if config.target_difficulty else 2
             blueprint = TestBlueprint(
                 overall_strategy="Fallback",
-                requirements=[BlueprintRequirement(subject=config.target_subject, topic=config.target_topic, sub_topic="General", quantity=config.num_questions, target_difficulty=config.target_difficulty, reasoning="Fallback", question_type="Standard", requires_shared_context=False)]
+                requirements=[BlueprintRequirement(subject=config.target_subject, topic=config.target_topic, sub_topic="General", quantity=config.num_questions, target_difficulty=fallback_diff, reasoning="Fallback", question_type="Standard", requires_shared_context=False)]
             )
 
     current_count = len(state.get("selected_questions", []))
     deficit = config.num_questions - current_count
-    print(f"\n📊 Planner: {current_count}/{config.num_questions} questions ready. Deficit: {deficit}")
     
-    if deficit <= 0:
+    # 👉 THE FIX: Global Failsafe logic to prevent overall infinite loops
+    loops = state.get("current_question_index", 0)
+    max_cycles = math.ceil(config.num_questions / 5) + 3 # Dynamically scale cycles based on test size
+    
+    print(f"\n📊 Planner: {current_count}/{config.num_questions} ready. Deficit: {deficit} (Cycle {loops}/{max_cycles})")
+    
+    if deficit <= 0 or loops >= max_cycles:
+        if loops >= max_cycles:
+            print(f"⚠️ Global Failsafe Tripped: Stopping after {loops} cycles to prevent infinite loop.")
         return {"current_batch_target": 0, "blueprint": blueprint}
         
     return {
         "current_batch_target": min(deficit, 5), 
         "draft_batch": [],
         "rejected_batch": [],
-        "blueprint": blueprint
+        "blueprint": blueprint,
+        "current_question_index": loops + 1 # Increment the global cycle counter
     }
 
 # ==========================================
@@ -181,7 +203,6 @@ def database_retriever_node(state: AdaptiveTestState) -> dict:
         existing_counts[q.metadata.sub_topic] = existing_counts.get(q.metadata.sub_topic, 0) + 1
 
     for req in blueprint.requirements:
-        # BYPASS RETRIEVAL FOR SHARED CONTEXT (To prevent fracturing)
         if req.requires_shared_context:
             continue
             
@@ -192,12 +213,11 @@ def database_retriever_node(state: AdaptiveTestState) -> dict:
                 
             current_exclude_ids = existing_ids + seen_history + [fq.id for fq in found_questions]
             
-            # CRITICAL FIX: Passing target_sub_topic so the Retriever can actually find the saved questions!
             q = retrieve_best_question(
                 target_exam=state["profile"].target_exam,
                 target_subject=req.subject,
                 target_topic=req.topic,  
-                target_sub_topic=req.sub_topic, # <--- THE FIX
+                target_sub_topic=req.sub_topic,
                 target_difficulty=req.target_difficulty,
                 student_profile=state["profile"],
                 exclude_ids=current_exclude_ids
@@ -299,7 +319,6 @@ def generator_node(state: AdaptiveTestState) -> dict:
         
         raw_json_array = json.loads(clean_json_response(response.text))
         
-        # --- THE PYTHON MAGIC: IDs, Normalization, and Escape Hatch Tracking ---
         full_syllabus_map = load_syllabus_map()
         exam_map = full_syllabus_map.get(state["profile"].target_exam, {})
         
@@ -307,18 +326,15 @@ def generator_node(state: AdaptiveTestState) -> dict:
         for q_dict in raw_json_array:
             meta = q_dict["metadata"]
             
-            # 1. Deterministic Python IDs
             safe_exam = state["profile"].target_exam.replace(" ", "")[:4]
             safe_subj = meta.get("subject", "Subj").replace(" ", "")[:4]
             q_dict["id"] = f"q_{safe_exam}_{safe_subj}_{uuid.uuid4().hex[:8]}"
             
-            # 2. String Normalization (Case-Sensitivity Fix)
             sub_topic = str(meta.get("sub_topic", "General")).strip().title()
             meta["sub_topic"] = sub_topic
             meta["exam"] = state["profile"].target_exam
             meta["ttl_days"] = 180 if "Current" in meta.get("subject", "") else None
             
-            # 3. Escape Hatch Taxonomy Tracker
             is_official = False
             for subj, topics in exam_map.items():
                 for top, sub_topics in topics.items():
@@ -398,7 +414,6 @@ def saver_node(state: AdaptiveTestState) -> dict:
     
     new_approved = [q for q in approved_questions if q.id in draft_ids]
     if new_approved:
-        # Group Bypass Rule implementation warning
         print(f"💾 Saver: Processing {len(new_approved)} new questions for OpenSearch...")
         
         grouped_qs = [q for q in new_approved if q.shared_context]
@@ -407,7 +422,6 @@ def saver_node(state: AdaptiveTestState) -> dict:
         if grouped_qs:
             print(f"⚠️ BYPASSING Deduplication for {len(grouped_qs)} grouped 'shared_context' questions to protect atomic blocks.")
             
-        # Ensure your save_questions_to_db logic inside vector_store.py handles this properly!
         save_questions_to_db(new_approved)
         
     return {"generation_attempts": 0}
@@ -427,10 +441,17 @@ def route_after_retriever(state: AdaptiveTestState) -> Literal["planner", "gener
     return "planner"
 
 def route_after_critic(state: AdaptiveTestState) -> Literal["saver", "generator"]:
+    # 👉 THE FIX: Break out of the tight loop if Generator hit the max limit!
+    if state.get("generation_attempts", 0) >= 3:
+        print("🛑 Generator attempts maxed out for this batch. Forcing route to Saver.")
+        return "saver"
+        
     if state.get("rejected_batch"):
         return "generator"
+        
     if state.get("current_batch_target", 0) > 0 and not state.get("draft_batch"):
         return "generator"
+        
     return "saver"
 
 # ==========================================

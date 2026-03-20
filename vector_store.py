@@ -7,7 +7,7 @@ from google import genai
 from google.genai import types 
 from schema import Question, StudentProfile
 from typing import List, Optional
-from dotenv import load_dotenv  # <-- 1. ADD THIS IMPORT
+from dotenv import load_dotenv  
 
 # ==========================================
 # 1. CLOUD INITIALIZATION
@@ -20,7 +20,6 @@ host = os.environ.get('OPENSEARCH_ENDPOINT', '').replace('https://', '')
 region = os.environ.get('AWS_REGION', 'us-east-1')
 service = 'aoss'
 
-# UPGRADED: V2 Index to support new schema mappings without crashing
 INDEX_NAME = "adaptive-questions-v2"
 
 def get_opensearch_client():
@@ -94,7 +93,6 @@ def save_questions_to_db(questions: List[Question]):
     _ensure_index_exists(client)
 
     for q in questions:
-        # THE GROUP BYPASS RULE: Do not deduplicate grouped passages!
         if q.shared_context:
             print(f"   -> 🛡️ Bypassing Deduplication for Grouped Question: {q.id}")
             _index_question(client, q)
@@ -106,7 +104,6 @@ def save_questions_to_db(questions: List[Question]):
         if not vector:
             continue
             
-        # THE DEDUPLICATION ENGINE: Check for similar questions in the SAME exam
         search_body = {
             "size": 1,
             "query": {
@@ -128,7 +125,6 @@ def save_questions_to_db(questions: List[Question]):
             is_duplicate = False
             if hits:
                 best_hit = hits[0]
-                # OpenSearch Cosine Sim Score is usually 1 + cosine_similarity. So 1.95 means >95% similar.
                 score = best_hit.get('_score', 0)
                 existing_answer = best_hit.get('_source', {}).get('correct_answer')
                 
@@ -173,7 +169,7 @@ def retrieve_best_question(
     target_exam: str, 
     target_subject: str, 
     target_topic: str, 
-    target_sub_topic: str, # <-- NEW: Pass the 3rd tier!
+    target_sub_topic: str, 
     target_difficulty: int,
     student_profile: StudentProfile,
     exclude_ids: List[str]
@@ -201,9 +197,12 @@ def retrieve_best_question(
         query["query"]["bool"]["must"].append({"term": {"topic": target_topic}})
         
     if target_sub_topic and target_sub_topic not in ["All Syllabus", "General"]:
-        # CRITICAL FIX: Match the EXACT case (.title()) that was saved by the Generator
         clean_sub_topic = str(target_sub_topic).strip().title()
         query["query"]["bool"]["must"].append({"term": {"sub_topic": clean_sub_topic}})
+
+    # 👉 THE FIX: Strict match the dynamically generated difficulty level
+    if target_difficulty is not None:
+        query["query"]["bool"]["must"].append({"term": {"difficulty": target_difficulty}})
 
     try:
         response = client.search(index=INDEX_NAME, body=query)
@@ -212,7 +211,6 @@ def retrieve_best_question(
             source = hits[0]['_source']
             source.pop('embedding', None)
             
-            # 👉 THE FIX: 'correct_answer' has been removed from this list
             for field in ['exam', 'subject', 'topic', 'sub_topic', 'taxonomy_source', 'difficulty']:
                 source.pop(field, None)
                 

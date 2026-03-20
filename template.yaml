@@ -21,6 +21,23 @@ Resources:
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
+  # 👉 NEW: DynamoDB Table for Historical Test Logs
+  TestHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AdaptiveTestHistoryLogs  
+      AttributeDefinitions:
+        - AttributeName: student_id
+          AttributeType: S
+        - AttributeName: timestamp      
+          AttributeType: S
+      KeySchema:
+        - AttributeName: student_id
+          KeyType: HASH
+        - AttributeName: timestamp      
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
   # 2. OpenSearch Serverless (Vector DB for Option A)
   OptionAVectorDB:
     Type: AWS::OpenSearchServerless::Collection
@@ -56,11 +73,15 @@ Resources:
       Environment:
         Variables:
           STUDENT_TABLE: !Ref StudentProfileTable
+          HISTORY_TABLE: !Ref TestHistoryTable # 👉 NEW: Inject the history table name
           OPENSEARCH_ENDPOINT: !GetAtt OptionAVectorDB.CollectionEndpoint
           GEMINI_API_KEY: "placeholder-key"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref StudentProfileTable
+        # 👉 NEW: Grant permission to the new history table
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TestHistoryTable
         # Grant Lambda permission to access the OpenSearch APIs
         - Statement:
             - Effect: Allow
@@ -77,8 +98,6 @@ Resources:
       DockerContext: .
       DockerTag: python3.11-v1
 
-  # Data Access Policy to allow Lambda's specific IAM Role to read/write data
-  # Data Access Policy to allow Lambda and your local machine to read/write data
   # Data Access Policy to allow Lambda and your local machine to read/write data
   VectorDataAccessPolicy:
     Type: AWS::OpenSearchServerless::AccessPolicy

@@ -60,7 +60,10 @@ class StudentProfile(BaseModel):
 class TestConfig(BaseModel):
     target_subject: str = "All Syllabus"
     target_topic: str = "All Syllabus" 
-    target_difficulty: int = 3
+    
+    # 👉 THE FIX: Changed to Optional and defaults to None for Auto-Mode
+    target_difficulty: Optional[int] = None 
+    
     num_questions: int = 50
     adaptive_mode: bool = True
     override_topics: Optional[List[str]] = None          

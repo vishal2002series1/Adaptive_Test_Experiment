@@ -7,36 +7,12 @@ from google.genai import types
 from langgraph.graph import StateGraph, END
 
 from schema import EvaluationState, ProficiencyRecord
-from db import save_student_profile
+# 👉 NEW: Import the history saving function
+from db import save_student_profile, save_test_history
 
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
-
-# ==========================================
-# HISTORY TRACKER (Temporary Storage)
-# ==========================================
-def save_test_history_locally(profile_id, exam, score, graded_results, study_plan):
-    """Saves the test results to Lambda's /tmp directory to prevent read-only crashes."""
-    tmp_dir = "/tmp/test_history"
-    os.makedirs(tmp_dir, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{tmp_dir}/{profile_id}_{timestamp}.json"
-    
-    history_record = {
-        "timestamp": timestamp,
-        "exam": exam,
-        "score_percentage": score,
-        "graded_results": graded_results,
-        "study_plan": study_plan
-    }
-    
-    try:
-        with open(filename, "w") as f:
-            json.dump(history_record, f, indent=4)
-        print(f"💾 Saved temporary test history to {filename}")
-    except Exception as e:
-        print(f"⚠️ Could not save history: {e}")
 
 # ==========================================
 # AGENT NODES
@@ -97,7 +73,7 @@ def profiler_node(state: EvaluationState) -> dict:
         sub_topic = result["sub_topic"]
         difficulty = result["difficulty"]
         
-        # 👉 THE FIX: Mark this specific question ID as "seen" so the Retriever ignores it forever
+        # Mark this specific question ID as "seen" so the Retriever ignores it forever
         profile.seen_question_counts[question_id] = profile.seen_question_counts.get(question_id, 0) + 1
         
         # 1. Search for existing ProficiencyRecord in the array
@@ -152,7 +128,8 @@ def strategist_node(state: EvaluationState) -> dict:
         study_plan = "### Diagnostic Summary\nExcellent performance. 100% accuracy achieved. Proceed to the next module to continue advancing your overall readiness."
         profile.last_study_plan = study_plan
         save_student_profile(profile)
-        save_test_history_locally(profile.student_id, profile.target_exam, score_percentage, graded_results, study_plan)
+        # 👉 UPDATE: Using the new DB function instead of local file write
+        save_test_history(profile.student_id, profile.target_exam, score_percentage, graded_results, study_plan)
         return {"study_plan": study_plan, "profile": profile}
         
     mistakes_context = ""
@@ -201,7 +178,8 @@ def strategist_node(state: EvaluationState) -> dict:
     profile.last_study_plan = study_plan
     save_student_profile(profile) 
 
-    save_test_history_locally(profile.student_id, profile.target_exam, score_percentage, graded_results, study_plan)
+    # 👉 UPDATE: Using the new DB function instead of local file write
+    save_test_history(profile.student_id, profile.target_exam, score_percentage, graded_results, study_plan)
 
     return {"study_plan": study_plan, "profile": profile}
 

@@ -2,7 +2,8 @@ import json
 from schema import StudentProfile, TestConfig, Question
 from graph import app as generator_app
 from evaluator_graph import evaluator_app 
-from db import get_student_profile
+# 👉 UPDATE: Import the new get_student_test_history function
+from db import get_student_profile, get_student_test_history
 
 def lambda_handler(event, context):
     """
@@ -28,13 +29,24 @@ def lambda_handler(event, context):
             student.seen_question_counts.update(student_data['seen_question_counts'])
 
         # ==========================================
-        # ROUTE 0: FETCH PROFILE (NEW)
+        # ROUTE 0: FETCH PROFILE 
         # ==========================================
         if action == 'get_profile':
             print(f"📖 Fetching profile for {student_id} ({target_exam})")
             return _build_response({
                 'message': 'Profile fetched successfully',
                 'profile': student.model_dump()
+            })
+
+        # ==========================================
+        # 👉 NEW ROUTE: FETCH TEST HISTORY
+        # ==========================================
+        elif action == 'get_history':
+            print(f"📖 Fetching test history for {student_id}")
+            history_logs = get_student_test_history(student_id)
+            return _build_response({
+                'message': 'History fetched successfully',
+                'history': history_logs
             })
 
         # ==========================================
@@ -45,10 +57,11 @@ def lambda_handler(event, context):
             config = TestConfig(
                 target_subject=config_data.get('target_subject', 'Economy'),
                 target_topic=config_data.get('target_topic', 'All Syllabus'),
-                target_difficulty=config_data.get('target_difficulty', 3),
+                # 👉 FIX: Removed default 3 so it accepts 'None' for dynamic difficulty!
+                target_difficulty=config_data.get('target_difficulty'), 
                 num_questions=config_data.get('num_questions', 5),
                 adaptive_mode=config_data.get('adaptive_mode', True),
-                override_topics=config_data.get('override_topics') # <-- Accept UI overrides
+                override_topics=config_data.get('override_topics') 
             )
             
             # If the user selected specific checkboxes, we inject them directly 
@@ -64,7 +77,7 @@ def lambda_handler(event, context):
                 "draft_batch": [],
                 "rejected_batch": [],
                 "current_batch_target": config.num_questions,
-                "exploitation_topics": start_exploitation, # <-- Injected here
+                "exploitation_topics": start_exploitation, 
                 "exploration_topics": []
             }
             
