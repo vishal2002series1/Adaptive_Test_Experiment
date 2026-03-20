@@ -119,3 +119,28 @@ class EvaluationState(TypedDict):
     graded_results: List[Dict[str, Any]] 
     score_percentage: float
     study_plan: str
+
+
+# ==========================================
+# 5. DYNAMIC WORKBOOK MODELS (Learning Engine)
+# ==========================================
+
+class VideoReference(BaseModel):
+    title: str = Field(description="Title of the recommended video.")
+    url: str = Field(description="URL link to the video (e.g., YouTube).")
+    why_watch_this: str = Field(description="A brief explanation of why this specific video is helpful for this topic.")
+
+class LearningWorkbook(BaseModel):
+    id: str = Field(description="Unique ID for the workbook")
+    target_exam: str
+    sub_topic: str
+    difficulty_level: int
+    
+    # The Content Blocks
+    theory_markdown: str = Field(description="Core concepts and definitions formatted beautifully in Markdown.")       
+    mermaid_graph_code: str = Field(description="Mermaid.js syntax for a flowchart, mind-map, or architecture diagram.")    
+    tricks_and_mnemonics: str = Field(description="Short-cuts, tricks, or mnemonics to solve questions faster.")  
+    video_references: List[VideoReference] = Field(description="Curated list of external video resources.")
+    
+    # The Assessment this
+    practice_question_ids: List[str] = Field(default_factory=list, description="IDs of practice questions linked from OpenSearch123.")

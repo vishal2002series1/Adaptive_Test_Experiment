@@ -1,9 +1,27 @@
 import json
+from decimal import Decimal
 from schema import StudentProfile, TestConfig, Question
 from graph import app as generator_app
 from evaluator_graph import evaluator_app 
-# 👉 UPDATE: Import the new get_student_test_history function
-from db import get_student_profile, get_student_test_history
+from workbook_graph import workbook_app
+from db import get_student_profile, get_student_test_history, get_cached_workbook
+
+# 👉 THE FIX: Safely encode DynamoDB Decimals into integers/floats
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else float(obj)
+        return super(DecimalEncoder, self).default(obj)
+
+def _build_response(body_dict, status_code=200):
+    return {
+        'statusCode': status_code,
+        'headers': {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        },
+        'body': json.dumps(body_dict, cls=DecimalEncoder)
+    }
 
 def lambda_handler(event, context):
     """
@@ -13,16 +31,13 @@ def lambda_handler(event, context):
     print("🚀 Received request from Lambda Function URL")
     
     try:
-        # 1. Parse the incoming HTTP request body
         body = json.loads(event.get('body', '{}'))
         action = body.get('action', 'generate') 
         
-        # 2. Extract common profile configuration
         student_data = body.get('student_profile', {})
         student_id = student_data.get('student_id', 'anonymous')
         target_exam = student_data.get('target_exam', 'UPSC')
         
-        # 3. Fetch historical profile from DynamoDB 
         student = get_student_profile(student_id=student_id, target_exam=target_exam)
         
         if 'seen_question_counts' in student_data:
@@ -39,7 +54,7 @@ def lambda_handler(event, context):
             })
 
         # ==========================================
-        # 👉 NEW ROUTE: FETCH TEST HISTORY
+        # ROUTE 1: FETCH TEST HISTORY
         # ==========================================
         elif action == 'get_history':
             print(f"📖 Fetching test history for {student_id}")
@@ -50,22 +65,57 @@ def lambda_handler(event, context):
             })
 
         # ==========================================
-        # ROUTE 1: TEST GENERATION
+        # ROUTE 2: GET OR GENERATE WORKBOOK
+        # ==========================================
+        elif action == 'get_workbook':
+            config_data = body.get('workbook_config', {})
+            subject = config_data.get('subject', 'General')
+            topic = config_data.get('topic', 'General')
+            sub_topic = config_data.get('sub_topic')
+            difficulty = config_data.get('difficulty_level', 3)
+
+            if not sub_topic:
+                raise ValueError("A sub_topic must be provided to fetch a workbook.")
+
+            print(f"📚 Requesting Workbook: {target_exam} -> {sub_topic} (Lvl {difficulty})")
+            
+            cached_wb = get_cached_workbook(target_exam, sub_topic, difficulty)
+            if cached_wb:
+                print("⚡ Cache hit! Returning instant workbook.")
+                return _build_response({
+                    'message': 'Workbook fetched from cache',
+                    'workbook': cached_wb
+                })
+                
+            print("⏳ Cache miss. Invoking Workbook Generator Graph...")
+            wb_state = {
+                "target_exam": target_exam,
+                "subject": subject,
+                "topic": topic,
+                "sub_topic": sub_topic,
+                "difficulty_level": difficulty
+            }
+            final_wb_state = workbook_app.invoke(wb_state)
+            
+            return _build_response({
+                'message': 'Workbook generated successfully',
+                'workbook': final_wb_state['final_workbook'].model_dump()
+            })
+
+        # ==========================================
+        # ROUTE 3: TEST GENERATION
         # ==========================================
         elif action == 'generate':
             config_data = body.get('test_config', {})
             config = TestConfig(
                 target_subject=config_data.get('target_subject', 'Economy'),
                 target_topic=config_data.get('target_topic', 'All Syllabus'),
-                # 👉 FIX: Removed default 3 so it accepts 'None' for dynamic difficulty!
                 target_difficulty=config_data.get('target_difficulty'), 
                 num_questions=config_data.get('num_questions', 5),
                 adaptive_mode=config_data.get('adaptive_mode', True),
                 override_topics=config_data.get('override_topics') 
             )
             
-            # If the user selected specific checkboxes, we inject them directly 
-            # into the initial state so the Orchestrator knows to use them!
             start_exploitation = config.override_topics if config.override_topics else []
             
             initial_state = {
@@ -93,7 +143,7 @@ def lambda_handler(event, context):
             })
 
         # ==========================================
-        # ROUTE 2: TEST EVALUATION
+        # ROUTE 4: TEST EVALUATION
         # ==========================================
         elif action == 'evaluate':
             raw_questions = body.get('questions', [])
@@ -127,13 +177,3 @@ def lambda_handler(event, context):
     except Exception as e:
         print(f"❌ Error in Lambda execution: {str(e)}")
         return _build_response({'error': str(e)}, status_code=500)
-
-def _build_response(body_dict, status_code=200):
-    return {
-        'statusCode': status_code,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-        'body': json.dumps(body_dict, default=str)
-    }

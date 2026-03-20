@@ -21,7 +21,7 @@ Resources:
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
-  # 👉 NEW: DynamoDB Table for Historical Test Logs
+  # 2. DynamoDB Table for Historical Test Logs
   TestHistoryTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -38,7 +38,25 @@ Resources:
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
 
-  # 2. OpenSearch Serverless (Vector DB for Option A)
+  # 👉 NEW 3. DynamoDB Table for Caching Dynamic Workbooks
+  WorkbookCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AdaptiveWorkbooks  
+      AttributeDefinitions:
+        - AttributeName: target_exam
+          AttributeType: S
+        # We will use a composite key like "Economy#Inflation#Level3"
+        - AttributeName: topic_key      
+          AttributeType: S
+      KeySchema:
+        - AttributeName: target_exam
+          KeyType: HASH
+        - AttributeName: topic_key      
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  # 4. OpenSearch Serverless (Vector DB for Option A)
   OptionAVectorDB:
     Type: AWS::OpenSearchServerless::Collection
     DependsOn: [VectorEncryptionPolicy, VectorNetworkPolicy]
@@ -61,7 +79,7 @@ Resources:
       Type: "network"
       Policy: '[{"Rules":[{"ResourceType":"collection","Resource":["collection/option-a-vector-db"]}],"AllowFromPublic":true}]'
 
-  # 3. The LangGraph Multi-Agent Lambda Function
+  # 5. The LangGraph Multi-Agent Lambda Function
   TestGeneratorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -73,15 +91,18 @@ Resources:
       Environment:
         Variables:
           STUDENT_TABLE: !Ref StudentProfileTable
-          HISTORY_TABLE: !Ref TestHistoryTable # 👉 NEW: Inject the history table name
+          HISTORY_TABLE: !Ref TestHistoryTable 
+          WORKBOOK_TABLE: !Ref WorkbookCacheTable # 👉 NEW: Inject workbook table name
           OPENSEARCH_ENDPOINT: !GetAtt OptionAVectorDB.CollectionEndpoint
           GEMINI_API_KEY: "placeholder-key"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref StudentProfileTable
-        # 👉 NEW: Grant permission to the new history table
         - DynamoDBCrudPolicy:
             TableName: !Ref TestHistoryTable
+        # 👉 NEW: Grant permission to the new workbook table
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WorkbookCacheTable
         # Grant Lambda permission to access the OpenSearch APIs
         - Statement:
             - Effect: Allow

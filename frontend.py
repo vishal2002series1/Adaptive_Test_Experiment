@@ -38,15 +38,25 @@ def parse_iso_date(iso_str):
         return iso_str
 
 # --- DYNAMIC LOADER THREAD ---
-def update_loading_text(placeholder, stop_event):
-    """Cycles through dynamic agent statuses."""
-    messages = [
-        "⏳ Planner Agent is analyzing your historical weaknesses...",
-        "🔍 Librarian Agent is checking OpenSearch for existing matches...",
-        "✍️ Generator Agent is drafting highly calibrated questions...",
-        "🧐 Critic Agent is running quality assurance and formatting checks...",
-        "🔄 Agents are refining the question batch..."
-    ]
+def update_loading_text(placeholder, stop_event, mode="test"):
+    """Cycles through dynamic agent statuses based on the mode."""
+    if mode == "workbook":
+        messages = [
+            "🔍 Researcher Agent is finding the best video resources...",
+            "✍️ Author Agent is drafting theory and mnemonics...",
+            "🎨 Designer Agent is coding the Mermaid.js visualization...",
+            "🗂️ Curator Agent is pulling relevant practice questions...",
+            "💾 Compiler is caching your workbook to DynamoDB..."
+        ]
+    else:
+        messages = [
+            "⏳ Planner Agent is analyzing your historical weaknesses...",
+            "🔍 Librarian Agent is checking OpenSearch for existing matches...",
+            "✍️ Generator Agent is drafting highly calibrated questions...",
+            "🧐 Critic Agent is running quality assurance and formatting checks...",
+            "🔄 Agents are refining the question batch..."
+        ]
+        
     i = 0
     while not stop_event.is_set():
         placeholder.info(messages[i % len(messages)])
@@ -68,21 +78,22 @@ if 'fetched_profile_data' not in st.session_state:
     st.session_state.fetched_profile_data = None
 if 'history_logs' not in st.session_state:
     st.session_state.history_logs = []
+if 'current_workbook' not in st.session_state:
+    st.session_state.current_workbook = None
 
 # ==========================================
 # UI NAVIGATION TABS
 # ==========================================
-# We only show tabs if we are in the setup phase
 if st.session_state.phase == 'setup':
-    tab_setup, tab_history = st.tabs(["🚀 Take a Test", "📂 Test History"])
+    tab_setup, tab_history, tab_learn = st.tabs(["🚀 Take a Test", "📂 Test History", "🧠 Study Modules"])
 else:
-    # Dummy context managers so the rest of the code works without indenting everything
     from contextlib import nullcontext
     tab_setup = nullcontext()
     tab_history = nullcontext()
+    tab_learn = nullcontext()
 
 # ==========================================
-# PHASE 1: SETUP & CONFIGURATION (Inside Tab 1)
+# PHASE 1: SETUP & CONFIGURATION
 # ==========================================
 with tab_setup:
     if st.session_state.phase == 'setup':
@@ -196,7 +207,7 @@ with tab_setup:
             stop_event = threading.Event()
             
             if add_script_run_ctx:
-                t = threading.Thread(target=update_loading_text, args=(status_placeholder, stop_event))
+                t = threading.Thread(target=update_loading_text, args=(status_placeholder, stop_event, "test"))
                 add_script_run_ctx(t)
                 t.start()
             else:
@@ -223,15 +234,21 @@ with tab_setup:
                 stop_event.set()
                 status_placeholder.empty()
                 
-                if response.status_code == 200:
-                    data = response.json()
-                    st.session_state.questions = data.get("questions", [])
+                # 👉 UPDATE: Added safety net for Test Generation too
+                try:
+                    res_json = response.json()
+                except Exception:
+                    st.error(f"Backend returned non-JSON format! Raw Response: {response.text}")
+                    res_json = {}
+                
+                if response.status_code == 200 and res_json:
+                    st.session_state.questions = res_json.get("questions", [])
                     st.session_state.student_profile = payload["student_profile"]
                     st.session_state.user_answers = {} 
                     st.session_state.phase = 'testing'
                     st.rerun()
-                else:
-                    st.error(f"Test Generation Failed: {response.json().get('error', response.text)}")
+                elif res_json:
+                    st.error(f"Test Generation Failed: {res_json.get('error', response.text)}")
             except Exception as e:
                 stop_event.set()
                 status_placeholder.empty()
@@ -249,8 +266,8 @@ with tab_history:
         with hist_col1:
             history_student_id = st.text_input("Enter Student ID to fetch history", value=student_id, key="hist_id")
         with hist_col2:
-            st.write("") # spacing
-            st.write("") # spacing
+            st.write("") 
+            st.write("") 
             fetch_history_btn = st.button("Fetch History 🔍", use_container_width=True)
             
         if fetch_history_btn:
@@ -278,27 +295,124 @@ with tab_history:
                 date_str = parse_iso_date(log.get('timestamp', ''))
                 
                 with st.expander(f"📝 {exam_name} - {date_str} (Score: {score}%)"):
-                    
                     if log.get('study_plan'):
                         st.markdown("**AI Study Plan Provided:**")
                         st.info(log.get('study_plan'))
                         
                     st.markdown("**Questions & Answers:**")
                     for q_idx, result in enumerate(log.get('graded_results', [])):
-                        
                         question_text = result.get('text', 'Question text missing')
                         is_correct = result.get('is_correct', False)
                         icon = "✅" if is_correct else "❌"
                         
                         st.markdown(f"**Q{q_idx+1}.** {format_latex(question_text)}")
                         st.write(f"{icon} **Your Answer:** {result.get('student_answer')} | **Correct Answer:** {result.get('correct_answer')}")
-                        
                         st.caption(f"Taxonomy: {result.get('subject')} > {result.get('topic')} > {result.get('sub_topic')} | Difficulty: {result.get('difficulty')}")
                         
                         with st.popover("Show Explanation"):
                             st.markdown(format_latex(result.get('explanation', 'No explanation provided.')))
-                        
                         st.divider()
+
+# ==========================================
+# 👉 STUDY MODULES TAB
+# ==========================================
+with tab_learn:
+    if st.session_state.phase == 'setup':
+        st.title("🧠 AI Study Modules")
+        st.write("Generate interactive workbooks for any topic to master weak areas.")
+        
+        wb_col1, wb_col2 = st.columns(2)
+        with wb_col1:
+            wb_subject = st.text_input("Subject", value="General Awareness")
+            wb_topic = st.text_input("Topic", value="Economy")
+        with wb_col2:
+            wb_subtopic = st.text_input("Sub-Topic (Required)", value="Inflation")
+            wb_difficulty = st.slider("Target Difficulty Level", 1, 5, 3, key="wb_diff")
+            
+        if st.button("Generate Study Module 📖", use_container_width=True, type="primary"):
+            status_placeholder = st.empty()
+            stop_event = threading.Event()
+            
+            if add_script_run_ctx:
+                t = threading.Thread(target=update_loading_text, args=(status_placeholder, stop_event, "workbook"))
+                add_script_run_ctx(t)
+                t.start()
+            else:
+                status_placeholder.info("⏳ AI Agents are writing your workbook...")
+                
+            payload = {
+                "action": "get_workbook",
+                "student_profile": {
+                    "student_id": student_id,
+                    "target_exam": target_exam
+                },
+                "workbook_config": {
+                    "subject": wb_subject,
+                    "topic": wb_topic,
+                    "sub_topic": wb_subtopic,
+                    "difficulty_level": wb_difficulty
+                }
+            }
+            
+            try:
+                response = requests.post(API_URL, json=payload, timeout=900)
+                stop_event.set()
+                status_placeholder.empty()
+                
+                # 👉 UPDATE: The Ultimate Safety Net. We now intercept invalid JSON and print the raw string.
+                try:
+                    res_json = response.json()
+                except Exception as json_err:
+                    st.error(f"AWS Failed to return JSON! Raw Server Response: {response.text}")
+                    res_json = None
+                
+                if res_json:
+                    if response.status_code == 200:
+                        st.session_state.current_workbook = res_json.get('workbook')
+                        st.success("✅ Workbook loaded successfully!")
+                    else:
+                        st.error(f"Generation Failed: {res_json.get('error', response.text)}")
+            except Exception as e:
+                stop_event.set()
+                status_placeholder.empty()
+                st.error(f"Connection Error: {e}")
+                
+        # --- DISPLAY THE WORKBOOK ---
+        if st.session_state.current_workbook:
+            wb = st.session_state.current_workbook
+            st.divider()
+            st.header(f"Module: {wb.get('sub_topic')}")
+            st.caption(f"Difficulty Level: {wb.get('difficulty_level')} | Target Exam: {wb.get('target_exam')}")
+            
+            tab_theory, tab_visual, tab_tricks, tab_videos = st.tabs(["📖 Theory", "🗺️ Mind Map", "💡 Tricks", "🎥 Videos"])
+            
+            with tab_theory:
+                st.markdown(format_latex(wb.get('theory_markdown', '')))
+                
+            with tab_visual:
+                st.write("Visual breakdown of the concepts:")
+                mermaid_code = wb.get('mermaid_graph_code', '')
+                if mermaid_code:
+                    st.markdown(f"```mermaid\n{mermaid_code}\n```")
+                else:
+                    st.info("No visualization available for this topic.")
+                    
+            with tab_tricks:
+                st.markdown(format_latex(wb.get('tricks_and_mnemonics', '')))
+                
+            with tab_videos:
+                videos = wb.get('video_references', [])
+                if videos:
+                    for v in videos:
+                        with st.container(border=True):
+                            st.markdown(f"**[{v.get('title', 'Video')}]({v.get('url', '#')})**")
+                            st.write(v.get('why_watch_this', ''))
+                else:
+                    st.info("No video recommendations available.")
+                    
+            q_ids = wb.get('practice_question_ids', [])
+            if q_ids:
+                st.success(f"🎯 The Curator found **{len(q_ids)}** practice questions matching this module in your database. Switch to 'Take a Test' mode to practice them!")
 
 # ==========================================
 # PHASE 2: TEST TAKING
@@ -347,11 +461,18 @@ if st.session_state.phase == 'testing':
                 
                 try:
                     eval_response = requests.post(API_URL, json=eval_payload, timeout=300)
-                    if eval_response.status_code == 200:
-                        st.session_state.evaluation = eval_response.json()
+                    
+                    try:
+                        res_json = eval_response.json()
+                    except Exception:
+                        st.error(f"AWS returned non-JSON format! Raw: {eval_response.text}")
+                        res_json = {}
+                        
+                    if eval_response.status_code == 200 and res_json:
+                        st.session_state.evaluation = res_json
                         st.session_state.phase = 'results'
                         st.rerun()
-                    else:
+                    elif res_json:
                         st.error(f"Evaluation Error: {eval_response.text}")
                 except Exception as e:
                     st.error(f"Connection Error: {e}")
@@ -401,4 +522,5 @@ elif st.session_state.phase == 'results':
         st.session_state.evaluation = None
         st.session_state.fetched_profile_data = None 
         st.session_state.history_logs = []
+        st.session_state.current_workbook = None
         st.rerun()
