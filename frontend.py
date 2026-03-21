@@ -4,6 +4,7 @@ import json
 import threading
 import time
 from datetime import datetime
+import streamlit.components.v1 as components
 
 # Safely import Streamlit's context manager for background threading
 try:
@@ -30,21 +31,93 @@ def format_latex(text):
     return text
 
 def parse_iso_date(iso_str):
-    """Helper to convert ISO string to readable format"""
     try:
         dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
         return dt.strftime("%B %d, %Y at %I:%M %p")
     except:
         return iso_str
 
-# --- DYNAMIC LOADER THREAD ---
+# 👉 THE FIX: Replaced render_mermaid with render_markmap entirely
+def render_markmap(markdown_content: str):
+    """Renders a highly interactive, collapsible mind map with a Pan/Zoom toolbar"""
+    
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body, html {{
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                font-family: sans-serif;
+                background-color: transparent;
+                overflow: hidden; /* Hide native scrollbars to allow click-and-drag panning */
+            }}
+            svg {{
+                width: 100vw;
+                height: 100vh;
+            }}
+            /* Slight styling for the toolbar to make it look native */
+            .markmap-toolbar {{
+                position: absolute;
+                bottom: 20px;
+                right: 20px;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }}
+        </style>
+        
+        <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+        <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.16.0"></script>
+        <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.16.0"></script>
+        <script src="https://cdn.jsdelivr.net/npm/markmap-toolbar@0.16.0"></script>
+    </head>
+    <body>
+        <textarea id="md-content" style="display:none;">{markdown_content}</textarea>
+        
+        <svg id="markmap"></svg>
+        
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {{
+                // 1. Get markdown content safely from the textarea
+                const markdown = document.getElementById('md-content').value;
+                
+                // 2. Initialize markmap
+                const {{ markmap }} = window;
+                const {{ Transformer, Markmap, Toolbar }} = markmap;
+                
+                const transformer = new Transformer();
+                const {{ root }} = transformer.transform(markdown);
+                
+                // 3. Render to the SVG and force it to auto-fit the screen
+                const mm = Markmap.create('#markmap', {{
+                    autoFit: true,
+                    duration: 500
+                }}, root);
+                
+                // 4. Attach the Interactive Toolbar (Zoom In, Zoom Out, Fit to Screen)
+                const toolbar = new Toolbar();
+                toolbar.attach(mm);
+                const toolbarEl = toolbar.render();
+                document.body.appendChild(toolbarEl);
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    
+    components.html(html_code, height=600, scrolling=False)
+
+    
 def update_loading_text(placeholder, stop_event, mode="test"):
-    """Cycles through dynamic agent statuses based on the mode."""
     if mode == "workbook":
         messages = [
             "🔍 Researcher Agent is finding the best video resources...",
             "✍️ Author Agent is drafting theory and mnemonics...",
-            "🎨 Designer Agent is coding the Mermaid.js visualization...",
+            "🎨 Designer Agent is mapping the interactive mind map...",
             "🗂️ Curator Agent is pulling relevant practice questions...",
             "💾 Compiler is caching your workbook to DynamoDB..."
         ]
@@ -63,23 +136,117 @@ def update_loading_text(placeholder, stop_event, mode="test"):
         time.sleep(2.5)
         i += 1
 
+# 👉 HELPER 1: Centralized API Caller for Workbooks
+def request_workbook_generation(student_id, target_exam, subject, topic, sub_topic, difficulty):
+    """Handles the UI threading and API call for generating workbooks from anywhere."""
+    status_placeholder = st.empty()
+    stop_event = threading.Event()
+    
+    if add_script_run_ctx:
+        t = threading.Thread(target=update_loading_text, args=(status_placeholder, stop_event, "workbook"))
+        add_script_run_ctx(t)
+        t.start()
+    else:
+        status_placeholder.info("⏳ AI Agents are writing your workbook...")
+        
+    payload = {
+        "action": "get_workbook",
+        "student_profile": {"student_id": student_id, "target_exam": target_exam},
+        "workbook_config": {
+            "subject": subject,
+            "topic": topic,
+            "sub_topic": sub_topic,
+            "difficulty_level": difficulty
+        }
+    }
+    
+    try:
+        response = requests.post(API_URL, json=payload, timeout=900)
+        stop_event.set()
+        status_placeholder.empty()
+        
+        try:
+            res_json = response.json()
+        except Exception:
+            st.error(f"AWS Failed to return JSON! Raw Server Response: {response.text}")
+            return None
+        
+        if res_json and response.status_code == 200:
+            return res_json.get('workbook')
+        elif res_json:
+            st.error(f"Generation Failed: {res_json.get('error', response.text)}")
+            return None
+    except Exception as e:
+        stop_event.set()
+        status_placeholder.empty()
+        st.error(f"Connection Error: {e}")
+        return None
+
+# 👉 HELPER 2: Centralized UI Renderer for Workbooks
+def render_workbook_ui(wb):
+    """Renders the workbook content cleanly."""
+    st.divider()
+    st.header(f"Module: {wb.get('sub_topic')}")
+    st.caption(f"Difficulty Level: {wb.get('difficulty_level')} | Target Exam: {wb.get('target_exam')}")
+    
+    tab_theory, tab_visual, tab_tricks, tab_videos, tab_practice = st.tabs(["📖 Theory", "🗺️ Mind Map", "💡 Tricks", "🎥 Videos", "📝 Practice"])
+    
+    with tab_theory:
+        st.markdown(format_latex(wb.get('theory_markdown', '')))
+        
+    # 👉 THE FIX: Updated this tab to properly call `render_markmap`
+    with tab_visual:
+        st.write("💡 **Interactive Mind Map:** Use your mouse to drag/zoom, and click on the circles to expand or collapse learning branches for active recall!")
+        map_data = wb.get('mermaid_graph_code', '')
+        if map_data:
+            render_markmap(map_data)
+        else:
+            st.info("No visualization available for this topic.")
+            
+    with tab_tricks:
+        st.markdown(format_latex(wb.get('tricks_and_mnemonics', '')))
+        
+    with tab_videos:
+        videos = wb.get('video_references', [])
+        if videos:
+            for v in videos:
+                with st.container(border=True):
+                    st.markdown(f"**[{v.get('title', 'Video')}]({v.get('url', '#')})**")
+                    st.write(v.get('why_watch_this', ''))
+        else:
+            st.info("No video recommendations available.")
+            
+    with tab_practice:
+        questions = wb.get('practice_questions', [])
+        if questions:
+            st.write("Test your understanding of this module:")
+            for i, q_dict in enumerate(questions):
+                with st.container(border=True):
+                    st.markdown(f"**Q{i+1}.** {format_latex(q_dict.get('text', ''))}")
+                    
+                    options = q_dict.get('options', {})
+                    for key, val in options.items():
+                        st.write(f"**{key}:** {format_latex(val)}")
+                        
+                    with st.expander("👀 Show Answer & Explanation"):
+                        st.success(f"**Correct Answer: {q_dict.get('correct_answer')}**")
+                        st.markdown(format_latex(q_dict.get('explanation', '')))
+        else:
+            st.info("No specific practice questions are mapped to this module yet. Try generating more tests in this subject!")
+
 # --- STATE MANAGEMENT ---
-if 'phase' not in st.session_state:
-    st.session_state.phase = 'setup'
-if 'questions' not in st.session_state:
-    st.session_state.questions = []
-if 'user_answers' not in st.session_state:
-    st.session_state.user_answers = {}
-if 'evaluation' not in st.session_state:
-    st.session_state.evaluation = None
-if 'student_profile' not in st.session_state:
-    st.session_state.student_profile = {}
-if 'fetched_profile_data' not in st.session_state:
-    st.session_state.fetched_profile_data = None
-if 'history_logs' not in st.session_state:
-    st.session_state.history_logs = []
-if 'current_workbook' not in st.session_state:
-    st.session_state.current_workbook = None
+if 'phase' not in st.session_state: st.session_state.phase = 'setup'
+if 'questions' not in st.session_state: st.session_state.questions = []
+if 'user_answers' not in st.session_state: st.session_state.user_answers = {}
+if 'evaluation' not in st.session_state: st.session_state.evaluation = None
+if 'student_profile' not in st.session_state: st.session_state.student_profile = {}
+if 'fetched_profile_data' not in st.session_state: st.session_state.fetched_profile_data = None
+if 'history_logs' not in st.session_state: st.session_state.history_logs = []
+
+# New UI States for holding workbooks loaded from the History or Results tabs
+if 'current_workbook' not in st.session_state: st.session_state.current_workbook = None
+if 'active_history_wb' not in st.session_state: st.session_state.active_history_wb = None
+if 'active_results_wb' not in st.session_state: st.session_state.active_results_wb = None
 
 # ==========================================
 # UI NAVIGATION TABS
@@ -234,7 +401,6 @@ with tab_setup:
                 stop_event.set()
                 status_placeholder.empty()
                 
-                # 👉 UPDATE: Added safety net for Test Generation too
                 try:
                     res_json = response.json()
                 except Exception:
@@ -260,61 +426,89 @@ with tab_setup:
 with tab_history:
     if st.session_state.phase == 'setup':
         st.title("📂 Your Past Tests")
-        st.write("Review your historical performance and analyze past mistakes.")
         
-        hist_col1, hist_col2 = st.columns([3, 1])
-        with hist_col1:
-            history_student_id = st.text_input("Enter Student ID to fetch history", value=student_id, key="hist_id")
-        with hist_col2:
-            st.write("") 
-            st.write("") 
-            fetch_history_btn = st.button("Fetch History 🔍", use_container_width=True)
+        if st.session_state.active_history_wb:
+            if st.button("⬅️ Back to Test History"):
+                st.session_state.active_history_wb = None
+                st.rerun()
+            render_workbook_ui(st.session_state.active_history_wb)
             
-        if fetch_history_btn:
-            with st.spinner("Fetching test logs from DynamoDB..."):
-                payload = {
-                    "action": "get_history",
-                    "student_profile": {"student_id": history_student_id}
-                }
-                try:
-                    res = requests.post(API_URL, json=payload, timeout=30)
-                    if res.status_code == 200:
-                        st.session_state.history_logs = res.json().get('history', [])
-                        if not st.session_state.history_logs:
-                            st.info("No test history found for this Student ID.")
-                    else:
-                        st.error(f"Failed to load history: {res.text}")
-                except Exception as e:
-                    st.error(f"Connection error: {e}")
-                    
-        if st.session_state.history_logs:
-            st.divider()
-            for index, log in enumerate(st.session_state.history_logs):
-                exam_name = log.get('exam', 'Unknown Exam')
-                score = log.get('score_percentage', 0)
-                date_str = parse_iso_date(log.get('timestamp', ''))
+        else:
+            st.write("Review your historical performance and analyze past mistakes.")
+            hist_col1, hist_col2 = st.columns([3, 1])
+            with hist_col1:
+                history_student_id = st.text_input("Enter Student ID to fetch history", value=student_id, key="hist_id")
+            with hist_col2:
+                st.write("") 
+                st.write("") 
+                fetch_history_btn = st.button("Fetch History 🔍", use_container_width=True)
                 
-                with st.expander(f"📝 {exam_name} - {date_str} (Score: {score}%)"):
-                    if log.get('study_plan'):
-                        st.markdown("**AI Study Plan Provided:**")
-                        st.info(log.get('study_plan'))
+            if fetch_history_btn:
+                with st.spinner("Fetching test logs from DynamoDB..."):
+                    payload = {
+                        "action": "get_history",
+                        "student_profile": {"student_id": history_student_id}
+                    }
+                    try:
+                        res = requests.post(API_URL, json=payload, timeout=30)
+                        if res.status_code == 200:
+                            st.session_state.history_logs = res.json().get('history', [])
+                            if not st.session_state.history_logs:
+                                st.info("No test history found for this Student ID.")
+                        else:
+                            st.error(f"Failed to load history: {res.text}")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
                         
-                    st.markdown("**Questions & Answers:**")
-                    for q_idx, result in enumerate(log.get('graded_results', [])):
-                        question_text = result.get('text', 'Question text missing')
-                        is_correct = result.get('is_correct', False)
-                        icon = "✅" if is_correct else "❌"
+            if st.session_state.history_logs:
+                st.divider()
+                for index, log in enumerate(st.session_state.history_logs):
+                    exam_name = log.get('exam', 'Unknown Exam')
+                    score = log.get('score_percentage', 0)
+                    date_str = parse_iso_date(log.get('timestamp', ''))
+                    
+                    with st.expander(f"📝 {exam_name} - {date_str} (Score: {score}%)"):
+                        if log.get('study_plan'):
+                            st.markdown("**AI Study Plan Provided:**")
+                            st.info(log.get('study_plan'))
+                            
+                        mistakes = [r for r in log.get('graded_results', []) if not r.get('is_correct')]
+                        unique_mistakes = list({m['sub_topic']: m for m in mistakes}.values())
                         
-                        st.markdown(f"**Q{q_idx+1}.** {format_latex(question_text)}")
-                        st.write(f"{icon} **Your Answer:** {result.get('student_answer')} | **Correct Answer:** {result.get('correct_answer')}")
-                        st.caption(f"Taxonomy: {result.get('subject')} > {result.get('topic')} > {result.get('sub_topic')} | Difficulty: {result.get('difficulty')}")
-                        
-                        with st.popover("Show Explanation"):
-                            st.markdown(format_latex(result.get('explanation', 'No explanation provided.')))
-                        st.divider()
+                        if unique_mistakes:
+                            st.markdown("**🎯 Actionable Remediation:**")
+                            btn_cols = st.columns(3)
+                            for i, m in enumerate(unique_mistakes):
+                                if btn_cols[i%3].button(f"📖 Study {m['sub_topic']}", key=f"hist_wb_{index}_{i}"):
+                                    wb = request_workbook_generation(
+                                        student_id=history_student_id,
+                                        target_exam=exam_name,
+                                        subject=m.get('subject', 'General'),
+                                        topic=m.get('topic', 'General'),
+                                        sub_topic=m['sub_topic'],
+                                        difficulty=m.get('difficulty', 3)
+                                    )
+                                    if wb:
+                                        st.session_state.active_history_wb = wb
+                                        st.rerun()
+                            st.divider()
+                            
+                        st.markdown("**Questions & Answers:**")
+                        for q_idx, result in enumerate(log.get('graded_results', [])):
+                            question_text = result.get('text', 'Question text missing')
+                            is_correct = result.get('is_correct', False)
+                            icon = "✅" if is_correct else "❌"
+                            
+                            st.markdown(f"**Q{q_idx+1}.** {format_latex(question_text)}")
+                            st.write(f"{icon} **Your Answer:** {result.get('student_answer')} | **Correct Answer:** {result.get('correct_answer')}")
+                            st.caption(f"Taxonomy: {result.get('subject')} > {result.get('topic')} > {result.get('sub_topic')} | Difficulty: {result.get('difficulty')}")
+                            
+                            with st.popover("Show Explanation"):
+                                st.markdown(format_latex(result.get('explanation', 'No explanation provided.')))
+                            st.divider()
 
 # ==========================================
-# 👉 STUDY MODULES TAB
+# STUDY MODULES TAB
 # ==========================================
 with tab_learn:
     if st.session_state.phase == 'setup':
@@ -330,89 +524,13 @@ with tab_learn:
             wb_difficulty = st.slider("Target Difficulty Level", 1, 5, 3, key="wb_diff")
             
         if st.button("Generate Study Module 📖", use_container_width=True, type="primary"):
-            status_placeholder = st.empty()
-            stop_event = threading.Event()
-            
-            if add_script_run_ctx:
-                t = threading.Thread(target=update_loading_text, args=(status_placeholder, stop_event, "workbook"))
-                add_script_run_ctx(t)
-                t.start()
-            else:
-                status_placeholder.info("⏳ AI Agents are writing your workbook...")
+            wb = request_workbook_generation(student_id, target_exam, wb_subject, wb_topic, wb_subtopic, wb_difficulty)
+            if wb:
+                st.session_state.current_workbook = wb
+                st.success("✅ Workbook loaded successfully!")
                 
-            payload = {
-                "action": "get_workbook",
-                "student_profile": {
-                    "student_id": student_id,
-                    "target_exam": target_exam
-                },
-                "workbook_config": {
-                    "subject": wb_subject,
-                    "topic": wb_topic,
-                    "sub_topic": wb_subtopic,
-                    "difficulty_level": wb_difficulty
-                }
-            }
-            
-            try:
-                response = requests.post(API_URL, json=payload, timeout=900)
-                stop_event.set()
-                status_placeholder.empty()
-                
-                # 👉 UPDATE: The Ultimate Safety Net. We now intercept invalid JSON and print the raw string.
-                try:
-                    res_json = response.json()
-                except Exception as json_err:
-                    st.error(f"AWS Failed to return JSON! Raw Server Response: {response.text}")
-                    res_json = None
-                
-                if res_json:
-                    if response.status_code == 200:
-                        st.session_state.current_workbook = res_json.get('workbook')
-                        st.success("✅ Workbook loaded successfully!")
-                    else:
-                        st.error(f"Generation Failed: {res_json.get('error', response.text)}")
-            except Exception as e:
-                stop_event.set()
-                status_placeholder.empty()
-                st.error(f"Connection Error: {e}")
-                
-        # --- DISPLAY THE WORKBOOK ---
         if st.session_state.current_workbook:
-            wb = st.session_state.current_workbook
-            st.divider()
-            st.header(f"Module: {wb.get('sub_topic')}")
-            st.caption(f"Difficulty Level: {wb.get('difficulty_level')} | Target Exam: {wb.get('target_exam')}")
-            
-            tab_theory, tab_visual, tab_tricks, tab_videos = st.tabs(["📖 Theory", "🗺️ Mind Map", "💡 Tricks", "🎥 Videos"])
-            
-            with tab_theory:
-                st.markdown(format_latex(wb.get('theory_markdown', '')))
-                
-            with tab_visual:
-                st.write("Visual breakdown of the concepts:")
-                mermaid_code = wb.get('mermaid_graph_code', '')
-                if mermaid_code:
-                    st.markdown(f"```mermaid\n{mermaid_code}\n```")
-                else:
-                    st.info("No visualization available for this topic.")
-                    
-            with tab_tricks:
-                st.markdown(format_latex(wb.get('tricks_and_mnemonics', '')))
-                
-            with tab_videos:
-                videos = wb.get('video_references', [])
-                if videos:
-                    for v in videos:
-                        with st.container(border=True):
-                            st.markdown(f"**[{v.get('title', 'Video')}]({v.get('url', '#')})**")
-                            st.write(v.get('why_watch_this', ''))
-                else:
-                    st.info("No video recommendations available.")
-                    
-            q_ids = wb.get('practice_question_ids', [])
-            if q_ids:
-                st.success(f"🎯 The Curator found **{len(q_ids)}** practice questions matching this module in your database. Switch to 'Take a Test' mode to practice them!")
+            render_workbook_ui(st.session_state.current_workbook)
 
 # ==========================================
 # PHASE 2: TEST TAKING
@@ -490,6 +608,36 @@ elif st.session_state.phase == 'results':
     st.subheader("💡 AI Study Plan & Recommendations")
     st.info(eval_data.get("study_plan", "No study plan provided."))
     
+    mistakes = [r for r in eval_data.get("graded_results", []) if not r.get('is_correct')]
+    unique_mistakes = list({m['sub_topic']: m for m in mistakes}.values())
+    
+    if unique_mistakes:
+        st.divider()
+        st.subheader("🎯 Recommended Remediation Modules")
+        st.write("Click a topic you failed to instantly generate a targeted study workbook.")
+        btn_cols = st.columns(3)
+        for i, m in enumerate(unique_mistakes):
+            if btn_cols[i%3].button(f"📖 Study {m['sub_topic']}", key=f"res_wb_{i}"):
+                wb = request_workbook_generation(
+                    student_id=st.session_state.student_profile['student_id'],
+                    target_exam=st.session_state.student_profile['target_exam'],
+                    subject=m.get('subject', 'General'),
+                    topic=m.get('topic', 'General'),
+                    sub_topic=m['sub_topic'],
+                    difficulty=m.get('difficulty', 3)
+                )
+                if wb:
+                    st.session_state.active_results_wb = wb
+                    st.rerun()
+
+    # Show the active workbook if the user clicked one
+    if st.session_state.active_results_wb:
+        render_workbook_ui(st.session_state.active_results_wb)
+        if st.button("❌ Close Module", key="close_res_wb"):
+            st.session_state.active_results_wb = None
+            st.rerun()
+            
+    st.divider()
     st.subheader("Detailed Breakdown")
     for result in eval_data.get("graded_results", []):
         q_id = result["question_id"]
@@ -523,4 +671,6 @@ elif st.session_state.phase == 'results':
         st.session_state.fetched_profile_data = None 
         st.session_state.history_logs = []
         st.session_state.current_workbook = None
+        st.session_state.active_history_wb = None
+        st.session_state.active_results_wb = None
         st.rerun()

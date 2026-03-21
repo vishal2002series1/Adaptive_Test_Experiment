@@ -142,5 +142,7 @@ class LearningWorkbook(BaseModel):
     tricks_and_mnemonics: str = Field(description="Short-cuts, tricks, or mnemonics to solve questions faster.")  
     video_references: List[VideoReference] = Field(description="Curated list of external video resources.")
     
-    # The Assessment this
-    practice_question_ids: List[str] = Field(default_factory=list, description="IDs of practice questions linked from OpenSearch123.")
+    # The Assessment
+    practice_question_ids: Optional[List[str]] = Field(default_factory=list, description="Legacy IDs.")
+    # 👉 THE FIX: We now permanently embed the full questions directly into the workbook!
+    practice_questions: List[Question] = Field(default_factory=list, description="Full practice question objects.")

@@ -32,7 +32,10 @@ class WorkbookState(TypedDict):
     theory_markdown: str
     tricks_and_mnemonics: str
     mermaid_graph_code: str
+    
+    # 👉 UPDATED: Store both IDs and Full Questions
     practice_question_ids: List[str]
+    practice_questions: List[Dict[str, Any]]
     
     # Final Output
     final_workbook: Optional[LearningWorkbook]
@@ -128,15 +131,32 @@ def author_node(state: WorkbookState) -> dict:
         return {"theory_markdown": "Error generating theory.", "tricks_and_mnemonics": ""}
 
 def designer_node(state: WorkbookState) -> dict:
-    print(f"🎨 Designer: Creating Mermaid.js visualizations...")
+    print(f"🎨 Designer: Creating Interactive Markmap hierarchy...")
     
     prompt = f"""
-    You are an expert data visualization designer.
-    Create a Mermaid.js diagram (like a flowchart graph TD, mindmap, or sequence diagram) that visually explains:
-    {state['sub_topic']} (Context: {state['target_exam']}).
+    You are an expert educational data visualizer. 
+    Your task is to create a comprehensive, highly readable Mind Map for the topic: {state['sub_topic']} (Context: {state['target_exam']}).
     
-    Output ONLY the raw Mermaid code block. Do NOT include markdown formatting like backticks. Just the code itself.
-    Ensure the syntax is perfect and uses distinct node shapes if helpful.
+    Instead of code, you must output a pure Nested Markdown List. 
+    
+    RULES:
+    1. Start with a single H1 (#) representing the core topic.
+    2. Use H2 (##) for main branches (e.g., Causes, Types, Impacts).
+    3. Use H3 (###) and bullet points (-) for deeper details.
+    4. Keep node text concise (1-5 words). If you need to explain more, nest it deeper.
+    5. ONLY output the markdown list. Do not include introductory text.
+    
+    EXAMPLE FORMAT:
+    # Inflation
+    ## Causes
+    ### Demand-Pull
+    - High Money Supply
+    - Population Growth
+    ### Cost-Push
+    - Supply Chain Shocks
+    ## Types
+    ### Creeping
+    - Less than 3%
     """
     try:
         response = client.models.generate_content(
@@ -144,18 +164,28 @@ def designer_node(state: WorkbookState) -> dict:
             contents=prompt,
             config=types.GenerateContentConfig(temperature=0.2)
         )
-        mermaid_code = clean_json_response(response.text)
-        if mermaid_code.startswith("mermaid\n"): mermaid_code = mermaid_code[8:]
-        elif mermaid_code.startswith("mermaid"): mermaid_code = mermaid_code[7:]
-        return {"mermaid_graph_code": mermaid_code.strip()}
+        # We don't need clean_json_response here because it's just raw markdown!
+        markdown_mindmap = response.text.strip()
+        
+        # Clean up stray backticks if the LLM wraps it in a markdown block
+        if markdown_mindmap.startswith("```markdown"):
+            markdown_mindmap = markdown_mindmap[11:]
+        elif markdown_mindmap.startswith("```"):
+            markdown_mindmap = markdown_mindmap[3:]
+        if markdown_mindmap.endswith("```"):
+            markdown_mindmap = markdown_mindmap[:-3]
+            
+        return {"mermaid_graph_code": markdown_mindmap.strip()}
     except Exception as e:
         print(f"❌ Designer Error: {e}")
-        return {"mermaid_graph_code": "graph TD\n A[Concept] --> B[Failed to load diagram]"}
+        return {"mermaid_graph_code": "# Error\n## Failed to load mind map"}
 
+# 👉 UPDATED: Curator now extracts and returns the full question dictionary
 def curator_node(state: WorkbookState) -> dict:
     print(f"🗂️ Curator: Fetching practice questions from Vector DB...")
     
     fetched_ids = []
+    fetched_questions = []
     dummy_profile = StudentProfile(student_id="workbook_curator", target_exam=state['target_exam'])
     
     for _ in range(3):
@@ -170,12 +200,14 @@ def curator_node(state: WorkbookState) -> dict:
         )
         if q:
             fetched_ids.append(q.id)
+            fetched_questions.append(q.model_dump())
         else:
             break
             
     print(f"✅ Curator attached {len(fetched_ids)} practice questions.")
-    return {"practice_question_ids": fetched_ids}
+    return {"practice_question_ids": fetched_ids, "practice_questions": fetched_questions}
 
+# 👉 UPDATED: Compiler adds the full questions to the LearningWorkbook model
 def compiler_node(state: WorkbookState) -> dict:
     print("🏗️ Compiler: Assembling final Learning Workbook...")
     
@@ -190,7 +222,8 @@ def compiler_node(state: WorkbookState) -> dict:
         mermaid_graph_code=state['mermaid_graph_code'],
         tricks_and_mnemonics=state['tricks_and_mnemonics'],
         video_references=videos,
-        practice_question_ids=state.get('practice_question_ids', [])
+        practice_question_ids=state.get('practice_question_ids', []),
+        practice_questions=state.get('practice_questions', [])
     )
     
     save_cached_workbook(workbook.model_dump())
