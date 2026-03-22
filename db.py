@@ -1,4 +1,5 @@
 import os
+import time
 import boto3
 import json
 from datetime import datetime, timezone
@@ -17,9 +18,14 @@ table = dynamodb.Table(TABLE_NAME)
 HISTORY_TABLE_NAME = os.environ.get('HISTORY_TABLE', 'AdaptiveTestHistoryLogs')
 history_table = dynamodb.Table(HISTORY_TABLE_NAME)
 
-# 3. 👉 NEW: Workbook Cache Table
+# 3. Workbook Cache Table
 WORKBOOK_TABLE_NAME = os.environ.get('WORKBOOK_TABLE', 'AdaptiveWorkbooks')
 workbook_table = dynamodb.Table(WORKBOOK_TABLE_NAME)
+
+# 4. 👉 NEW: Pending Tests Table
+PENDING_TESTS_TABLE_NAME = os.environ.get('PENDING_TESTS_TABLE', 'AdaptivePendingTests')
+pending_tests_table = dynamodb.Table(PENDING_TESTS_TABLE_NAME)
+
 
 def get_student_profile(student_id: str, target_exam: str) -> StudentProfile:
     """Fetches a student profile from DynamoDB or creates a default one."""
@@ -105,7 +111,7 @@ def get_student_test_history(student_id: str) -> List[Dict[str, Any]]:
         return []
 
 # ==========================================
-# 👉 NEW: DYNAMIC WORKBOOK CACHE LOGIC
+# DYNAMIC WORKBOOK CACHE LOGIC
 # ==========================================
 
 def _generate_topic_key(sub_topic: str, difficulty: int) -> str:
@@ -141,4 +147,67 @@ def save_cached_workbook(workbook_dict: Dict[str, Any]) -> bool:
         return True
     except Exception as e:
         print(f"❌ Error saving workbook to DynamoDB: {e}")
+        return False
+
+# ==========================================
+# 👉 NEW: PENDING TEST / SESSION RESUME LOGIC
+# ==========================================
+
+def save_pending_test(student_id: str, target_exam: str, test_config: Dict[str, Any], questions: List[Dict[str, Any]]) -> bool:
+    """Saves an unsubmitted test to DynamoDB with a 1-hour TTL."""
+    try:
+        # 👉 THE FIX: Swapped to a 1-hour expiration window (3600 seconds)
+        expiry_hours = int(os.environ.get('EXPIRY_HOURS', 1))
+        expires_at = int(time.time()) + (expiry_hours * 3600) 
+        
+        pending_record = {
+            "student_id": student_id,
+            "target_exam": target_exam,
+            "test_config": test_config,
+            "questions": questions,
+            "expires_at": expires_at,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+        dynamo_item = json.loads(json.dumps(pending_record), parse_float=Decimal)
+        pending_tests_table.put_item(Item=dynamo_item)
+        print(f"💾 Saved pending test for {student_id} ({target_exam}). Expires in {expiry_hours} hour(s).")
+        return True
+    except Exception as e:
+        print(f"❌ Error saving pending test: {e}")
+        return False
+
+def get_pending_test(student_id: str, target_exam: str) -> Optional[Dict[str, Any]]:
+    """Retrieves a pending test if it exists and hasn't expired."""
+    try:
+        response = pending_tests_table.get_item(Key={
+            'student_id': student_id,
+            'target_exam': target_exam
+        })
+        
+        item = response.get('Item')
+        if not item:
+            return None
+            
+        # Manually enforce TTL in case AWS hasn't physically deleted the ghost record yet
+        if item.get('expires_at', 0) < int(time.time()):
+            print(f"⚠️ Found expired ghost record for {student_id}. Ignoring.")
+            return None
+            
+        return item
+    except Exception as e:
+        print(f"❌ Error fetching pending test: {e}")
+        return None
+
+def delete_pending_test(student_id: str, target_exam: str) -> bool:
+    """Deletes a pending test after successful evaluation or manual overwrite."""
+    try:
+        pending_tests_table.delete_item(Key={
+            'student_id': student_id,
+            'target_exam': target_exam
+        })
+        print(f"🗑️ Deleted pending test for {student_id} ({target_exam}).")
+        return True
+    except Exception as e:
+        print(f"❌ Error deleting pending test: {e}")
         return False

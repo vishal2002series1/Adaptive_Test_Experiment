@@ -4,9 +4,17 @@ from schema import StudentProfile, TestConfig, Question
 from graph import app as generator_app
 from evaluator_graph import evaluator_app 
 from workbook_graph import workbook_app
-from db import get_student_profile, get_student_test_history, get_cached_workbook
 
-# 👉 THE FIX: Safely encode DynamoDB Decimals into integers/floats
+# 👉 THE FIX: Added the new DB functions
+from db import (
+    get_student_profile, 
+    get_student_test_history, 
+    get_cached_workbook,
+    save_pending_test,
+    get_pending_test,
+    delete_pending_test
+)
+
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Decimal):
@@ -103,7 +111,7 @@ def lambda_handler(event, context):
             })
 
         # ==========================================
-        # ROUTE 3: TEST GENERATION
+        # ROUTE 3: TEST GENERATION & INTERCEPTOR
         # ==========================================
         elif action == 'generate':
             config_data = body.get('test_config', {})
@@ -118,6 +126,83 @@ def lambda_handler(event, context):
             
             start_exploitation = config.override_topics if config.override_topics else []
             
+            # 🛑 PHASE 2: THE INTERCEPTOR ENGINE
+            pending_test = get_pending_test(student_id, target_exam)
+            
+            if pending_test:
+                pending_config = pending_test.get('test_config', {})
+                pending_qs = pending_test.get('questions', [])
+                
+                # STRICT MATCH VALIDATION
+                is_match = (
+                    pending_config.get('target_subject') == config.target_subject and
+                    pending_config.get('target_topic') == config.target_topic and
+                    pending_config.get('target_difficulty') == config.target_difficulty and
+                    pending_config.get('adaptive_mode') == config.adaptive_mode and
+                    pending_config.get('override_topics') == config.override_topics
+                )
+                
+                if is_match:
+                    r_len = config.num_questions
+                    p_len = len(pending_qs)
+                    
+                    if r_len <= p_len:
+                        # ⚡ INSTANT RESUME (Cost: $0)
+                        print(f"🔄 Resuming session: Slicing {r_len} questions from {p_len} pending.")
+                        output_test = pending_qs[:r_len]
+                        save_pending_test(student_id, target_exam, config_data, output_test)
+                        
+                        return _build_response({
+                            'message': 'Session restored successfully',
+                            'questions': output_test,
+                            'session_restored': True
+                        })
+                    else:
+                        # 🧩 DELTA GENERATION (Partial Cost)
+                        delta = r_len - p_len
+                        print(f"🔄 Resuming session: Found {p_len} pending. Generating {delta} more.")
+                        
+                        exclude_ids = [q['id'] for q in pending_qs]
+                        
+                        # Create a temporary config for just the missing questions
+                        delta_config = TestConfig(
+                            target_subject=config.target_subject,
+                            target_topic=config.target_topic,
+                            target_difficulty=config.target_difficulty, 
+                            num_questions=delta,
+                            adaptive_mode=config.adaptive_mode,
+                            override_topics=config.override_topics 
+                        )
+                        
+                        initial_state = {
+                            "profile": student,
+                            "config": delta_config,
+                            "current_question_index": 0,
+                            "generation_attempts": 0,
+                            "selected_questions": [],
+                            "draft_batch": [],
+                            "rejected_batch": [],
+                            "current_batch_target": delta,
+                            "exploitation_topics": start_exploitation, 
+                            "exploration_topics": [],
+                            "exclude_ids": exclude_ids # Passed to Librarian via GraphState
+                        }
+                        
+                        final_state = generator_app.invoke(initial_state)
+                        new_qs = [q.model_dump() for q in final_state.get("selected_questions", [])]
+                        
+                        output_test = pending_qs + new_qs
+                        save_pending_test(student_id, target_exam, config_data, output_test)
+                        
+                        return _build_response({
+                            'message': 'Session restored and expanded successfully',
+                            'questions': output_test,
+                            'session_restored': True
+                        })
+                else:
+                    print("⚠️ Pending test config mismatch. Overwriting with new request.")
+
+            # ⚙️ FRESH GENERATION (If no pending test or mismatch)
             initial_state = {
                 "profile": student,
                 "config": config,
@@ -128,22 +213,26 @@ def lambda_handler(event, context):
                 "rejected_batch": [],
                 "current_batch_target": config.num_questions,
                 "exploitation_topics": start_exploitation, 
-                "exploration_topics": []
+                "exploration_topics": [],
+                "exclude_ids": []
             }
             
             print(f"🧠 Invoking GENERATOR Graph for {config.num_questions} questions (Exam: {target_exam})...")
             final_state = generator_app.invoke(initial_state)
             
-            selected = final_state.get("selected_questions", [])
-            output_test = [q.model_dump() for q in selected] 
+            output_test = [q.model_dump() for q in final_state.get("selected_questions", [])] 
+            
+            # Save the fresh test to Pending cache
+            save_pending_test(student_id, target_exam, config_data, output_test)
             
             return _build_response({
                 'message': 'Test generated successfully',
-                'questions': output_test
+                'questions': output_test,
+                'session_restored': False
             })
 
         # ==========================================
-        # ROUTE 4: TEST EVALUATION
+        # ROUTE 4: TEST EVALUATION & PURGE
         # ==========================================
         elif action == 'evaluate':
             raw_questions = body.get('questions', [])
@@ -162,6 +251,9 @@ def lambda_handler(event, context):
             
             print(f"🧠 Invoking EVALUATOR Graph for {len(questions)} questions (Exam: {target_exam})...")
             final_state = evaluator_app.invoke(evaluation_state)
+            
+            # 🛑 PHASE 3: THE PURGE
+            delete_pending_test(student_id, target_exam)
             
             return _build_response({
                 'message': 'Test evaluated successfully',

@@ -37,7 +37,6 @@ def parse_iso_date(iso_str):
     except:
         return iso_str
 
-# 👉 THE FIX: Replaced render_mermaid with render_markmap entirely
 def render_markmap(markdown_content: str):
     """Renders a highly interactive, collapsible mind map with a Pan/Zoom toolbar"""
     
@@ -136,7 +135,6 @@ def update_loading_text(placeholder, stop_event, mode="test"):
         time.sleep(2.5)
         i += 1
 
-# 👉 HELPER 1: Centralized API Caller for Workbooks
 def request_workbook_generation(student_id, target_exam, subject, topic, sub_topic, difficulty):
     """Handles the UI threading and API call for generating workbooks from anywhere."""
     status_placeholder = st.empty()
@@ -182,7 +180,6 @@ def request_workbook_generation(student_id, target_exam, subject, topic, sub_top
         st.error(f"Connection Error: {e}")
         return None
 
-# 👉 HELPER 2: Centralized UI Renderer for Workbooks
 def render_workbook_ui(wb):
     """Renders the workbook content cleanly."""
     st.divider()
@@ -194,7 +191,6 @@ def render_workbook_ui(wb):
     with tab_theory:
         st.markdown(format_latex(wb.get('theory_markdown', '')))
         
-    # 👉 THE FIX: Updated this tab to properly call `render_markmap`
     with tab_visual:
         st.write("💡 **Interactive Mind Map:** Use your mouse to drag/zoom, and click on the circles to expand or collapse learning branches for active recall!")
         map_data = wb.get('mermaid_graph_code', '')
@@ -247,6 +243,9 @@ if 'history_logs' not in st.session_state: st.session_state.history_logs = []
 if 'current_workbook' not in st.session_state: st.session_state.current_workbook = None
 if 'active_history_wb' not in st.session_state: st.session_state.active_history_wb = None
 if 'active_results_wb' not in st.session_state: st.session_state.active_results_wb = None
+
+# 👉 THE FIX: Added state variable for the resume session banner
+if 'session_restored' not in st.session_state: st.session_state.session_restored = False
 
 # ==========================================
 # UI NAVIGATION TABS
@@ -411,6 +410,10 @@ with tab_setup:
                     st.session_state.questions = res_json.get("questions", [])
                     st.session_state.student_profile = payload["student_profile"]
                     st.session_state.user_answers = {} 
+                    
+                    # 👉 THE FIX: Capture the session_restored flag from the backend
+                    st.session_state.session_restored = res_json.get("session_restored", False)
+                    
                     st.session_state.phase = 'testing'
                     st.rerun()
                 elif res_json:
@@ -537,7 +540,13 @@ with tab_learn:
 # ==========================================
 if st.session_state.phase == 'testing':
     st.title(f"📝 {st.session_state.student_profile['target_exam']} Test")
-    st.write("Please answer the following questions.")
+    
+    # 👉 THE FIX: Display the banner if session was restored
+    if st.session_state.get('session_restored'):
+        st.success("ℹ️ Welcome back! We restored your unsubmitted test session.")
+    else:
+        st.write("Please answer the following questions.")
+        
     st.divider()
     
     rendered_contexts = set()
@@ -673,4 +682,8 @@ elif st.session_state.phase == 'results':
         st.session_state.current_workbook = None
         st.session_state.active_history_wb = None
         st.session_state.active_results_wb = None
+        
+        # 👉 THE FIX: Reset the session_restored flag for the new session
+        st.session_state.session_restored = False
+        
         st.rerun()

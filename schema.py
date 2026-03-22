@@ -107,6 +107,8 @@ class AdaptiveTestState(TypedDict):
     
     exploitation_topics: List[str]
     exploration_topics: List[str] 
+    exclude_ids: List[str] 
+    
     
 # ==========================================
 # 4. EVALUATION STATE (Post-Test Workflow)

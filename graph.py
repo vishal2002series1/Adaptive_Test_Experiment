@@ -164,9 +164,8 @@ def planner_node(state: AdaptiveTestState) -> dict:
     current_count = len(state.get("selected_questions", []))
     deficit = config.num_questions - current_count
     
-    # 👉 THE FIX: Global Failsafe logic to prevent overall infinite loops
     loops = state.get("current_question_index", 0)
-    max_cycles = math.ceil(config.num_questions / 5) + 3 # Dynamically scale cycles based on test size
+    max_cycles = math.ceil(config.num_questions / 5) + 3 
     
     print(f"\n📊 Planner: {current_count}/{config.num_questions} ready. Deficit: {deficit} (Cycle {loops}/{max_cycles})")
     
@@ -180,7 +179,7 @@ def planner_node(state: AdaptiveTestState) -> dict:
         "draft_batch": [],
         "rejected_batch": [],
         "blueprint": blueprint,
-        "current_question_index": loops + 1 # Increment the global cycle counter
+        "current_question_index": loops + 1 
     }
 
 # ==========================================
@@ -195,6 +194,9 @@ def database_retriever_node(state: AdaptiveTestState) -> dict:
         
     print(f"🔍 Retriever: Searching DB based on Blueprint Requirements...")
     found_questions = []
+    
+    # 👉 THE FIX: Extract external pending IDs and merge them with existing/seen IDs
+    external_exclude_ids = state.get("exclude_ids", [])
     existing_ids = [q.id for q in state.get("selected_questions", [])]
     seen_history = list(state["profile"].seen_question_counts.keys())
     
@@ -211,7 +213,8 @@ def database_retriever_node(state: AdaptiveTestState) -> dict:
             if len(found_questions) >= target:
                 break 
                 
-            current_exclude_ids = existing_ids + seen_history + [fq.id for fq in found_questions]
+            # Combine all IDs to completely block duplicates
+            current_exclude_ids = existing_ids + seen_history + external_exclude_ids + [fq.id for fq in found_questions]
             
             q = retrieve_best_question(
                 target_exam=state["profile"].target_exam,
@@ -441,7 +444,6 @@ def route_after_retriever(state: AdaptiveTestState) -> Literal["planner", "gener
     return "planner"
 
 def route_after_critic(state: AdaptiveTestState) -> Literal["saver", "generator"]:
-    # 👉 THE FIX: Break out of the tight loop if Generator hit the max limit!
     if state.get("generation_attempts", 0) >= 3:
         print("🛑 Generator attempts maxed out for this batch. Forcing route to Saver.")
         return "saver"
