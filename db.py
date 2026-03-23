@@ -22,7 +22,7 @@ history_table = dynamodb.Table(HISTORY_TABLE_NAME)
 WORKBOOK_TABLE_NAME = os.environ.get('WORKBOOK_TABLE', 'AdaptiveWorkbooks')
 workbook_table = dynamodb.Table(WORKBOOK_TABLE_NAME)
 
-# 4. 👉 NEW: Pending Tests Table
+# 4. Pending Tests Table
 PENDING_TESTS_TABLE_NAME = os.environ.get('PENDING_TESTS_TABLE', 'AdaptivePendingTests')
 pending_tests_table = dynamodb.Table(PENDING_TESTS_TABLE_NAME)
 
@@ -70,6 +70,18 @@ def save_student_profile(profile: StudentProfile) -> bool:
     except Exception as e:
         print(f"❌ Error saving to DynamoDB: {e}")
         return False
+
+# 👉 NEW: Fetch all profiles for the Dashboard
+def get_all_student_profiles(student_id: str) -> List[Dict[str, Any]]:
+    """Fetches all ongoing exam profiles for a student to populate the dashboard."""
+    try:
+        response = table.query(
+            KeyConditionExpression=Key('student_id').eq(student_id)
+        )
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"❌ Error fetching all profiles from DynamoDB: {e}")
+        return []
 
 # ==========================================
 # TEST HISTORY LOGIC
@@ -128,7 +140,17 @@ def get_cached_workbook(target_exam: str, sub_topic: str, difficulty: int) -> Op
             'target_exam': target_exam,
             'topic_key': topic_key
         })
-        return response.get('Item')
+        item = response.get('Item')
+        
+        if not item:
+            return None
+            
+        # 👉 THE FIX: Manually enforce TTL for ghost records
+        if item.get('expires_at', 0) and item.get('expires_at', 0) < int(time.time()):
+            print(f"⚠️ Found expired workbook for {topic_key}. Ignoring to generate fresh content.")
+            return None
+            
+        return item
     except Exception as e:
         print(f"❌ Error fetching workbook from DynamoDB: {e}")
         return None
@@ -140,6 +162,22 @@ def save_cached_workbook(workbook_dict: Dict[str, Any]) -> bool:
         topic_key = _generate_topic_key(workbook_dict['sub_topic'], workbook_dict['difficulty_level'])
         workbook_dict['topic_key'] = topic_key
         
+        # 👉 THE FIX: Calculate dynamic TTL
+        subject = workbook_dict.get('subject', '').lower()
+        topic = workbook_dict.get('topic', '').lower()
+        dynamic_keywords = ["current affairs", "general awareness", "economy", "science & tech", "banking", "finance", "government schemes"]
+        
+        is_dynamic = any(k in subject or k in topic for k in dynamic_keywords)
+        
+        if is_dynamic:
+            # Expire in 90 days for dynamic topics
+            workbook_dict['expires_at'] = int(time.time()) + (90 * 86400)
+            print("⏱️ Dynamic topic detected. Workbook cached with 90-day TTL.")
+        else:
+            # Expire in 5 years for static topics
+            workbook_dict['expires_at'] = int(time.time()) + (1825 * 86400)
+            print("⏱️ Static topic detected. Workbook cached with 5-year TTL.")
+        
         dynamo_item = json.loads(json.dumps(workbook_dict), parse_float=Decimal)
         
         workbook_table.put_item(Item=dynamo_item)
@@ -150,13 +188,12 @@ def save_cached_workbook(workbook_dict: Dict[str, Any]) -> bool:
         return False
 
 # ==========================================
-# 👉 NEW: PENDING TEST / SESSION RESUME LOGIC
+# PENDING TEST / SESSION RESUME LOGIC
 # ==========================================
 
 def save_pending_test(student_id: str, target_exam: str, test_config: Dict[str, Any], questions: List[Dict[str, Any]]) -> bool:
     """Saves an unsubmitted test to DynamoDB with a 1-hour TTL."""
     try:
-        # 👉 THE FIX: Swapped to a 1-hour expiration window (3600 seconds)
         expiry_hours = int(os.environ.get('EXPIRY_HOURS', 1))
         expires_at = int(time.time()) + (expiry_hours * 3600) 
         

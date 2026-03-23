@@ -5,9 +5,10 @@ from graph import app as generator_app
 from evaluator_graph import evaluator_app 
 from workbook_graph import workbook_app
 
-# 👉 THE FIX: Added the new DB functions
+# 👉 THE FIX: Added get_all_student_profiles to the import list
 from db import (
     get_student_profile, 
+    get_all_student_profiles,
     get_student_test_history, 
     get_cached_workbook,
     save_pending_test,
@@ -59,6 +60,17 @@ def lambda_handler(event, context):
             return _build_response({
                 'message': 'Profile fetched successfully',
                 'profile': student.model_dump()
+            })
+
+        # ==========================================
+        # 👉 NEW ROUTE 0.5: FETCH ALL PROFILES (DASHBOARD)
+        # ==========================================
+        elif action == 'get_all_profiles':
+            print(f"📊 Fetching all active profiles for {student_id}")
+            profiles = get_all_student_profiles(student_id)
+            return _build_response({
+                'message': 'Dashboard fetched successfully',
+                'profiles': profiles
             })
 
         # ==========================================

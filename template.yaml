@@ -46,7 +46,6 @@ Resources:
       AttributeDefinitions:
         - AttributeName: target_exam
           AttributeType: S
-        # We will use a composite key like "Economy#Inflation#Level3"
         - AttributeName: topic_key      
           AttributeType: S
       KeySchema:
@@ -55,8 +54,12 @@ Resources:
         - AttributeName: topic_key      
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
+      # 👉 THE FIX: Added TTL Specification for Content Retirement
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
 
-  # 👉 NEW 4. DynamoDB Table for Pending Tests & Session Resume
+  # 4. DynamoDB Table for Pending Tests & Session Resume
   PendingTestsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -72,7 +75,6 @@ Resources:
         - AttributeName: target_exam
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
-      # This tells AWS to silently delete tests when the epoch timestamp in 'expires_at' passes
       TimeToLiveSpecification:
         AttributeName: expires_at
         Enabled: true
@@ -114,9 +116,9 @@ Resources:
           STUDENT_TABLE: !Ref StudentProfileTable
           HISTORY_TABLE: !Ref TestHistoryTable 
           WORKBOOK_TABLE: !Ref WorkbookCacheTable
-          PENDING_TESTS_TABLE: !Ref PendingTestsTable # 👉 NEW: Inject pending tests table name
+          PENDING_TESTS_TABLE: !Ref PendingTestsTable 
           OPENSEARCH_ENDPOINT: !GetAtt OptionAVectorDB.CollectionEndpoint
-          GEMINI_API_KEY: "placeholder-key"
+          GEMINI_API_KEY: "placeholder-key" # 🚨 PUT YOUR REAL API KEY HERE!
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref StudentProfileTable
@@ -124,10 +126,8 @@ Resources:
             TableName: !Ref TestHistoryTable
         - DynamoDBCrudPolicy:
             TableName: !Ref WorkbookCacheTable
-        # 👉 NEW: Grant Lambda permission to Read/Write to the new Pending Tests table
         - DynamoDBCrudPolicy:
             TableName: !Ref PendingTestsTable
-        # Grant Lambda permission to access the OpenSearch APIs
         - Statement:
             - Effect: Allow
               Action:
@@ -143,7 +143,6 @@ Resources:
       DockerContext: .
       DockerTag: python3.11-v1
 
-  # Data Access Policy to allow Lambda and your local machine to read/write data
   VectorDataAccessPolicy:
     Type: AWS::OpenSearchServerless::AccessPolicy
     Properties:

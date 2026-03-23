@@ -37,38 +37,50 @@ def parse_iso_date(iso_str):
     except:
         return iso_str
 
+# --- DYNAMIC SYLLABUS LOADER & UI COMPONENTS ---
+@st.cache_data
+def load_syllabus_map():
+    """Loads the syllabus JSON locally so the UI can build cascading dropdowns instantly."""
+    try:
+        with open("syllabus_maps.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def dynamic_select(label, options, default_value, key):
+    """
+    Renders a selectbox. If 'Other...' is selected or default_value isn't in the list,
+    it gracefully provides a text input for manual override.
+    """
+    opts = [str(opt) for opt in options if opt] 
+    if "Other..." not in opts:
+        opts.append("Other...")
+        
+    try:
+        index = opts.index(default_value)
+        default_text = ""
+    except ValueError:
+        index = opts.index("Other...")
+        default_text = default_value if default_value else ""
+        
+    selected = st.selectbox(label, opts, index=index, key=f"{key}_select")
+    
+    if selected == "Other...":
+        return st.text_input(f"Enter Custom {label}", value=default_text, key=f"{key}_text")
+    return selected
+
+
 def render_markmap(markdown_content: str):
     """Renders a highly interactive, collapsible mind map with a Pan/Zoom toolbar"""
-    
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            body, html {{
-                margin: 0;
-                padding: 0;
-                width: 100%;
-                height: 100%;
-                font-family: sans-serif;
-                background-color: transparent;
-                overflow: hidden; /* Hide native scrollbars to allow click-and-drag panning */
-            }}
-            svg {{
-                width: 100vw;
-                height: 100vh;
-            }}
-            /* Slight styling for the toolbar to make it look native */
-            .markmap-toolbar {{
-                position: absolute;
-                bottom: 20px;
-                right: 20px;
-                background: white;
-                border-radius: 8px;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            }}
+            body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; background-color: transparent; overflow: hidden; }}
+            svg {{ width: 100vw; height: 100vh; }}
+            .markmap-toolbar {{ position: absolute; bottom: 20px; right: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
         </style>
-        
         <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
         <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.16.0"></script>
         <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.16.0"></script>
@@ -76,28 +88,18 @@ def render_markmap(markdown_content: str):
     </head>
     <body>
         <textarea id="md-content" style="display:none;">{markdown_content}</textarea>
-        
         <svg id="markmap"></svg>
-        
         <script>
             document.addEventListener('DOMContentLoaded', () => {{
-                // 1. Get markdown content safely from the textarea
                 const markdown = document.getElementById('md-content').value;
-                
-                // 2. Initialize markmap
                 const {{ markmap }} = window;
                 const {{ Transformer, Markmap, Toolbar }} = markmap;
                 
                 const transformer = new Transformer();
                 const {{ root }} = transformer.transform(markdown);
                 
-                // 3. Render to the SVG and force it to auto-fit the screen
-                const mm = Markmap.create('#markmap', {{
-                    autoFit: true,
-                    duration: 500
-                }}, root);
+                const mm = Markmap.create('#markmap', {{ autoFit: true, duration: 500 }}, root);
                 
-                // 4. Attach the Interactive Toolbar (Zoom In, Zoom Out, Fit to Screen)
                 const toolbar = new Toolbar();
                 toolbar.attach(mm);
                 const toolbarEl = toolbar.render();
@@ -107,7 +109,6 @@ def render_markmap(markdown_content: str):
     </body>
     </html>
     """
-    
     components.html(html_code, height=600, scrolling=False)
 
     
@@ -244,8 +245,24 @@ if 'current_workbook' not in st.session_state: st.session_state.current_workbook
 if 'active_history_wb' not in st.session_state: st.session_state.active_history_wb = None
 if 'active_results_wb' not in st.session_state: st.session_state.active_results_wb = None
 
-# 👉 THE FIX: Added state variable for the resume session banner
+# Session restored flag
 if 'session_restored' not in st.session_state: st.session_state.session_restored = False
+
+# --- DASHBOARD CALLBACK FUNCTION ---
+def load_scope_to_form(exam, scope, subject="Entire Syllabus", topic="All Syllabus"):
+    st.session_state.dash_exam = exam
+    st.session_state.dash_scope = scope
+    st.session_state.dash_subject = subject
+    st.session_state.dash_topic = topic
+    st.toast(f"✅ Loaded {scope} configuration into the test builder!")
+
+# Initialize default states for the form
+if 'dash_exam' not in st.session_state: st.session_state.dash_exam = "UPSC CSE Prelims"
+if 'dash_scope' not in st.session_state: st.session_state.dash_scope = "Full Exam"
+if 'dash_subject' not in st.session_state: st.session_state.dash_subject = "Entire Syllabus"
+if 'dash_topic' not in st.session_state: st.session_state.dash_topic = "All Syllabus"
+if 'dashboard_data' not in st.session_state: st.session_state.dashboard_data = None
+
 
 # ==========================================
 # UI NAVIGATION TABS
@@ -265,44 +282,129 @@ with tab_setup:
     if st.session_state.phase == 'setup':
         st.title("📚 AI Adaptive Test Engine")
         
-        st.subheader("1. User Profile")
-        col1, col2 = st.columns(2)
-        with col1:
+        # --- THE DASHBOARD ---
+        st.subheader("👤 Student Identity")
+        col_id, col_dash = st.columns([3, 1])
+        with col_id:
             student_id = st.text_input("Student ID", value="Physics Student V2")
-        with col2:
-            exam_preset = st.selectbox("Target Exam", ["UPSC CSE Prelims", "UPSC CSE Mains", "SSC CGL", "IBPS PO", "IBPS RRB PO", "RBI Grade B", "GATE CSE", "Custom Exam..."])
-            if exam_preset == "Custom Exam...":
-                target_exam = st.text_input("Enter Custom Exam Name", value="CAT Exam")
-            else:
-                target_exam = exam_preset
+        with col_dash:
+            st.write("") 
+            st.write("")
+            if st.button("📊 Load My Dashboard", use_container_width=True):
+                with st.spinner("Fetching ongoing tests..."):
+                    try:
+                        res = requests.post(API_URL, json={"action": "get_all_profiles", "student_profile": {"student_id": student_id}}, timeout=30)
+                        if res.status_code == 200:
+                            st.session_state.dashboard_data = res.json().get('profiles', [])
+                            if not st.session_state.dashboard_data:
+                                st.warning("No ongoing tests found. Start a new one below!")
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
+
+        if st.session_state.dashboard_data:
+            st.markdown("### 🏆 Your Ongoing Progress")
+            for profile in st.session_state.dashboard_data:
+                exam_name = profile.get('target_exam', 'Unknown')
+                overall_score = profile.get('overall_readiness_score', 0.0)
+                
+                with st.container(border=True):
+                    col_exam_title, col_exam_btn = st.columns([3, 1])
+                    with col_exam_title:
+                        st.markdown(f"#### 🎓 {exam_name}")
+                        st.progress(overall_score, text=f"Overall Readiness: {overall_score*100:.0f}%")
+                    with col_exam_btn:
+                        st.button(f"Resume Exam", key=f"res_{exam_name}", on_click=load_scope_to_form, args=(exam_name, "Full Exam"), use_container_width=True)
+                    
+                    # Group by Subject
+                    profs = profile.get('proficiencies', [])
+                    subjects = sorted(list(set([p.get('subject') for p in profs if p.get('subject')])))
+                    
+                    if subjects:
+                        for subj in subjects:
+                            subj_profs = [p for p in profs if p.get('subject') == subj]
+                            subj_score = sum([p.get('score', 0) for p in subj_profs]) / len(subj_profs) if subj_profs else 0
+                            
+                            with st.expander(f"📘 Subject: {subj} (Mastery: {subj_score*100:.0f}%)"):
+                                col_subj_title, col_subj_btn = st.columns([3, 1])
+                                with col_subj_title:
+                                    st.progress(subj_score)
+                                with col_subj_btn:
+                                    st.button(f"Study Subject", key=f"res_{exam_name}_{subj}", on_click=load_scope_to_form, args=(exam_name, "Specific Subject", subj), use_container_width=True)
+                                
+                                # Group by Topic
+                                topics = sorted(list(set([p.get('topic') for p in subj_profs if p.get('topic')])))
+                                for top in topics:
+                                    top_profs = [p for p in subj_profs if p.get('topic') == top]
+                                    top_score = sum([p.get('score', 0) for p in top_profs]) / len(top_profs) if top_profs else 0
+                                    
+                                    col_top_title, col_top_btn = st.columns([3, 1])
+                                    with col_top_title:
+                                        st.markdown(f"**Topic: {top}**")
+                                        st.progress(top_score, text=f"Score: {top_score*100:.0f}%")
+                                    with col_top_btn:
+                                        st.button(f"Study Topic", key=f"res_{exam_name}_{subj}_{top}", on_click=load_scope_to_form, args=(exam_name, "Specific Topic", subj, top), use_container_width=True)
 
         st.divider()
 
-        st.subheader("2. Testing Mode")
-        adaptive_mode = st.toggle("Enable Adaptive Learning Mode", value=True)
+        # --- THE TEST BUILDER FORM ---
+        st.subheader("⚙️ Configure Next Test")
         
-        target_subject = "Entire Syllabus"
-        target_topic = "All Syllabus"
-        target_difficulty = 3
-        num_questions = 5
+        # 👉 Load Syllabus Data
+        syllabus_map = load_syllabus_map()
+        available_exams_in_json = list(syllabus_map.keys())
+        base_presets = ["UPSC CSE Prelims", "UPSC CSE Mains", "SSC CGL", "IBPS PO", "IBPS RRB PO", "RBI Grade B", "GATE CSE"]
+        
+        # Merge JSON exams with presets, keeping order and removing duplicates
+        exam_options = list(dict.fromkeys(available_exams_in_json + base_presets)) + ["Custom Exam..."]
+        
+        try:
+            default_index = exam_options.index(st.session_state.dash_exam)
+            target_exam = st.selectbox("Target Exam", exam_options, index=default_index)
+        except ValueError:
+            target_exam = st.selectbox("Target Exam", exam_options, index=len(exam_options)-1)
+            target_exam = st.text_input("Enter Custom Exam Name", value=st.session_state.dash_exam)
+
+        # 👉 Fetch Available Subjects based on the selected exam
+        exam_data = syllabus_map.get(target_exam, {})
+        subject_options = list(exam_data.keys())
+
+        adaptive_mode = st.toggle("Enable Adaptive Learning Mode", value=True)
         selected_override_topics = []
 
         if not adaptive_mode:
             st.info("Manual Mode: Select exactly what you want to study.")
             col3, col4 = st.columns(2)
             with col3:
-                target_subject = st.text_input("Target Subject", value="Quantitative Aptitude")
-                target_topic = st.text_input("Target Topic", value="Arithmetic")
+                # 👉 Dynamic Subject Dropdown
+                target_subject = dynamic_select("Target Subject", subject_options, st.session_state.dash_subject, "man_subj")
+                
+                # 👉 Dynamic Topic Dropdown
+                topic_options = list(exam_data.get(target_subject, {}).keys())
+                target_topic = dynamic_select("Target Topic", topic_options, st.session_state.dash_topic, "man_top")
             with col4:
                 target_difficulty = st.slider("Difficulty Level", 1, 5, 3)
                 num_questions = st.number_input("Number of Questions", min_value=1, max_value=20, value=5)
         
         else:
-            st.success("Adaptive Mode: The AI will target your weak areas across the ENTIRE exam.")
+            st.success("Adaptive Mode: AI targets your weaknesses. Choose your scope below.")
             
-            use_specific_subject = st.checkbox("I want to target a specific subject (Optional)")
-            if use_specific_subject:
-                target_subject = st.text_input("Broad Target Subject", value="Quantitative Aptitude", help="Tell the AI to strictly focus on this specific subject within the exam.")
+            scope_options = ["Full Exam", "Specific Subject", "Specific Topic"]
+            scope_index = scope_options.index(st.session_state.dash_scope)
+            adaptive_scope = st.radio("Adaptive Scope:", scope_options, index=scope_index, horizontal=True)
+            
+            if adaptive_scope == "Specific Subject":
+                target_subject = dynamic_select("Target Subject", subject_options, st.session_state.dash_subject, "adp_subj_only")
+                target_topic = "All Syllabus"
+            elif adaptive_scope == "Specific Topic":
+                col_sub, col_top = st.columns(2)
+                with col_sub:
+                    target_subject = dynamic_select("Target Subject", subject_options, st.session_state.dash_subject, "adp_subj_full")
+                with col_top:
+                    topic_options = list(exam_data.get(target_subject, {}).keys())
+                    target_topic = dynamic_select("Target Topic", topic_options, st.session_state.dash_topic, "adp_top_full")
+            else:
+                target_subject = "Entire Syllabus"
+                target_topic = "All Syllabus"
             
             col_diff, col_num = st.columns(2)
             with col_diff:
@@ -344,16 +446,23 @@ with tab_setup:
                     with st.expander("📝 View Previous AI Study Plan", expanded=False):
                         st.markdown(last_plan)
                 
-                if not proficiencies:
-                    st.info("No historical topics found for this exam. The AI will start exploring new topics for you!")
+                # Filter the displayed UI progress bars based on selected scope
+                display_profs = proficiencies
+                if adaptive_scope != "Full Exam":
+                    display_profs = [p for p in display_profs if p.get('subject', '').lower() == target_subject.lower()]
+                if adaptive_scope == "Specific Topic":
+                    display_profs = [p for p in display_profs if p.get('topic', '').lower() == target_topic.lower()]
+                
+                if not display_profs:
+                    st.info(f"No historical topics found for the requested scope ({adaptive_scope}). The AI will start exploring new topics here!")
                 else:
                     st.markdown("#### Sub-Topic Mastery & Next Test Selection")
-                    st.write("Review your progress. The AI has pre-selected your 3 weakest sub-topics to focus on next, but you can change them.")
+                    st.write("Review your progress within this scope. The AI has pre-selected your weakest sub-topics.")
                     
-                    sorted_profs = sorted(proficiencies, key=lambda x: x.get('score', 0.0))
+                    sorted_profs = sorted(display_profs, key=lambda x: x.get('score', 0.0))
                     auto_select_topics = [p.get('sub_topic') for p in sorted_profs[:3]]
                     
-                    for p in proficiencies:
+                    for p in display_profs:
                         sub_topic = p.get('sub_topic', 'Unknown')
                         topic = p.get('topic', 'Unknown')
                         score = p.get('score', 0.0)
@@ -387,7 +496,7 @@ with tab_setup:
                 },
                 "test_config": {
                     "target_subject": target_subject,
-                    "target_topic": target_topic if not adaptive_mode else "Auto-Selected",
+                    "target_topic": target_topic, 
                     "target_difficulty": target_difficulty,
                     "num_questions": num_questions,
                     "adaptive_mode": adaptive_mode,
@@ -411,7 +520,6 @@ with tab_setup:
                     st.session_state.student_profile = payload["student_profile"]
                     st.session_state.user_answers = {} 
                     
-                    # 👉 THE FIX: Capture the session_restored flag from the backend
                     st.session_state.session_restored = res_json.get("session_restored", False)
                     
                     st.session_state.phase = 'testing'
@@ -518,12 +626,19 @@ with tab_learn:
         st.title("🧠 AI Study Modules")
         st.write("Generate interactive workbooks for any topic to master weak areas.")
         
+        # 👉 Load specific syllabus tree for this tab
+        syllabus_map = load_syllabus_map()
+        exam_data_learn = syllabus_map.get(target_exam, {}) if 'target_exam' in locals() else {}
+        subject_options_learn = list(exam_data_learn.keys())
+        
         wb_col1, wb_col2 = st.columns(2)
         with wb_col1:
-            wb_subject = st.text_input("Subject", value="General Awareness")
-            wb_topic = st.text_input("Topic", value="Economy")
+            wb_subject = dynamic_select("Subject", subject_options_learn, "General Awareness", "wb_subj")
+            topic_options_learn = list(exam_data_learn.get(wb_subject, {}).keys())
+            wb_topic = dynamic_select("Topic", topic_options_learn, "Economy", "wb_top")
         with wb_col2:
-            wb_subtopic = st.text_input("Sub-Topic (Required)", value="Inflation")
+            subtopic_options_learn = exam_data_learn.get(wb_subject, {}).get(wb_topic, [])
+            wb_subtopic = dynamic_select("Sub-Topic (Required)", subtopic_options_learn, "Inflation", "wb_sub")
             wb_difficulty = st.slider("Target Difficulty Level", 1, 5, 3, key="wb_diff")
             
         if st.button("Generate Study Module 📖", use_container_width=True, type="primary"):
@@ -541,7 +656,6 @@ with tab_learn:
 if st.session_state.phase == 'testing':
     st.title(f"📝 {st.session_state.student_profile['target_exam']} Test")
     
-    # 👉 THE FIX: Display the banner if session was restored
     if st.session_state.get('session_restored'):
         st.success("ℹ️ Welcome back! We restored your unsubmitted test session.")
     else:
@@ -682,8 +796,5 @@ elif st.session_state.phase == 'results':
         st.session_state.current_workbook = None
         st.session_state.active_history_wb = None
         st.session_state.active_results_wb = None
-        
-        # 👉 THE FIX: Reset the session_restored flag for the new session
         st.session_state.session_restored = False
-        
         st.rerun()

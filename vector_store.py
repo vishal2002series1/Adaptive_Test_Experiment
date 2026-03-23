@@ -2,6 +2,7 @@ import os
 import json
 import boto3
 import math
+import time
 from opensearchpy import OpenSearch, RequestsHttpConnection, AWSV4SignerAuth
 from google import genai
 from google.genai import types 
@@ -73,7 +74,9 @@ def _ensure_index_exists(client):
                     "sub_topic": {"type": "keyword"},
                     "taxonomy_source": {"type": "keyword"},
                     "difficulty": {"type": "integer"},
-                    "correct_answer": {"type": "keyword"}
+                    "correct_answer": {"type": "keyword"},
+                    "created_at": {"type": "long"},  # 👉 NEW: Timestamp for tracking
+                    "expires_at": {"type": "long"}   # 👉 NEW: TTL Expiration marker
                 }
             }
         }
@@ -155,6 +158,16 @@ def _index_question(client, q: Question, vector: List[float] = None):
     doc['difficulty'] = q.metadata.difficulty_level
     doc['correct_answer'] = q.correct_answer
     
+    # 👉 THE FIX: Inject creation and expiration timestamps
+    current_time = int(time.time())
+    doc['created_at'] = current_time
+    
+    # Check if the generator assigned a TTL (e.g., 180 days for current affairs)
+    ttl_days = getattr(q.metadata, 'ttl_days', None)
+    if ttl_days:
+        doc['expires_at'] = current_time + (ttl_days * 86400)
+        print(f"   -> ⏱️ Dynamic question detected. Setting expiration in {ttl_days} days.")
+    
     try:
         client.index(index=INDEX_NAME, body=doc)
         print(f"   -> Embedded and saved question: {q.id}")
@@ -177,7 +190,8 @@ def retrieve_best_question(
     client = get_opensearch_client()
     if not client or not client.indices.exists(index=INDEX_NAME): return None
 
-    # We now filter strictly by the exact 3-tier match
+    current_time = int(time.time())
+
     query = {
         "size": 1,
         "query": {
@@ -185,7 +199,20 @@ def retrieve_best_question(
                 "must": [
                     {"term": {"exam": target_exam}}
                 ],
-                "must_not": [{"terms": {"id": exclude_ids}}]
+                "must_not": [{"terms": {"id": exclude_ids}}],
+                # 👉 THE FIX: Filter out expired questions. 
+                # It accepts questions that don't have an expiration OR where the expiration is in the future.
+                "filter": [
+                    {
+                        "bool": {
+                            "should": [
+                                {"bool": {"must_not": {"exists": {"field": "expires_at"}}}},
+                                {"range": {"expires_at": {"gte": current_time}}}
+                            ],
+                            "minimum_should_match": 1
+                        }
+                    }
+                ]
             }
         }
     }
@@ -200,7 +227,6 @@ def retrieve_best_question(
         clean_sub_topic = str(target_sub_topic).strip().title()
         query["query"]["bool"]["must"].append({"term": {"sub_topic": clean_sub_topic}})
 
-    # 👉 THE FIX: Strict match the dynamically generated difficulty level
     if target_difficulty is not None:
         query["query"]["bool"]["must"].append({"term": {"difficulty": target_difficulty}})
 
@@ -211,7 +237,8 @@ def retrieve_best_question(
             source = hits[0]['_source']
             source.pop('embedding', None)
             
-            for field in ['exam', 'subject', 'topic', 'sub_topic', 'taxonomy_source', 'difficulty']:
+            # Remove our custom DB fields before initializing the Pydantic schema
+            for field in ['exam', 'subject', 'topic', 'sub_topic', 'taxonomy_source', 'difficulty', 'created_at', 'expires_at']:
                 source.pop(field, None)
                 
             return Question(**source)

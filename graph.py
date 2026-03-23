@@ -15,8 +15,6 @@ from vector_store import retrieve_best_question, save_questions_to_db, semantic_
 from db import save_student_profile
 from datetime import datetime
 
-current_year = datetime.now().year
-
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
@@ -64,18 +62,29 @@ def planner_node(state: AdaptiveTestState) -> dict:
     if not blueprint:
         print(f"🧭 Planner: Assembling strict 3-tier blueprint for {profile.target_exam}...")
         
-        explored_subtopics = profile.explored_topics
-        sorted_profs = sorted(profile.proficiencies, key=lambda x: x.score)
+        filtered_profs = profile.proficiencies
+        ignore_list = ["Entire Syllabus", "All Syllabus", "Auto-Selected", ""]
+        
+        is_subject_scoped = config.target_subject and config.target_subject not in ignore_list
+        is_topic_scoped = config.target_topic and config.target_topic not in ignore_list
+        
+        if is_subject_scoped:
+            filtered_profs = [p for p in filtered_profs if p.subject.lower() == config.target_subject.lower()]
+        if is_topic_scoped:
+            filtered_profs = [p for p in filtered_profs if p.topic.lower() == config.target_topic.lower()]
+            
+        explored_subtopics = [p.sub_topic for p in filtered_profs]
+        sorted_profs = sorted(filtered_profs, key=lambda x: x.score)
         weakest_subtopics = [p.sub_topic for p in sorted_profs[:3]] if sorted_profs else []
         
-        prof_summary = {p.sub_topic: round(p.score, 2) for p in profile.proficiencies}
+        prof_summary = {p.sub_topic: round(p.score, 2) for p in filtered_profs}
         
         planner_context = f"""
         OFFICIAL EXAM SYLLABUS MAP:
         {json.dumps(exam_map, indent=2) if exam_map else "No official map provided. Rely on your knowledge."}
         
-        STUDENT HISTORY (Sub-Topic : Current Score):
-        {prof_summary if prof_summary else "No history yet. Student is a blank slate."}
+        STUDENT HISTORY FOR REQUESTED SCOPE (Sub-Topic : Current Score):
+        {prof_summary if prof_summary else "No history yet in this specific scope. Student is a blank slate here."}
         
         - Weakest Sub-Topics (Needs Exploitation): {weakest_subtopics if weakest_subtopics else "None yet"}
         - Already Explored Sub-Topics: {explored_subtopics if explored_subtopics else "None yet"}
@@ -94,11 +103,17 @@ def planner_node(state: AdaptiveTestState) -> dict:
             """
         
         if config.adaptive_mode:
+            scope_rules = ""
+            if is_subject_scoped:
+                scope_rules += f"\n- SCOPE LIMITATION: You MUST strictly constrain ALL generated requirements to Subject: '{config.target_subject}'."
+            if is_topic_scoped:
+                scope_rules += f"\n- SCOPE LIMITATION: You MUST strictly constrain ALL generated requirements to Topic: '{config.target_topic}'."
+                
             planner_context += f"""
-            ADAPTIVE RULES:
+            ADAPTIVE RULES:{scope_rules}
             - Target EXACTLY {config.num_questions} questions.
-            - EXPLOITATION (~80%): Assign questions to the student's Weakest Sub-Topics.
-            - EXPLORATION (~20%): Discover 1 or 2 brand new Sub-Topics from the Official Map that the student has NOT explored yet. 
+            - EXPLOITATION (~80%): Assign questions to the student's Weakest Sub-Topics within the requested scope.
+            - EXPLORATION (~20%): Discover 1 or 2 brand new Sub-Topics from the Official Map that fall within the requested scope but haven't been explored yet. 
             - ESCAPE HATCH: If the requested target ({config.target_subject}) is missing from the Official Map, you may invent a relevant Topic and Sub-Topic, but you MUST maintain the strict Subject->Topic->Sub-Topic structure.
             """
         else:
@@ -195,7 +210,6 @@ def database_retriever_node(state: AdaptiveTestState) -> dict:
     print(f"🔍 Retriever: Searching DB based on Blueprint Requirements...")
     found_questions = []
     
-    # 👉 THE FIX: Extract external pending IDs and merge them with existing/seen IDs
     external_exclude_ids = state.get("exclude_ids", [])
     existing_ids = [q.id for q in state.get("selected_questions", [])]
     seen_history = list(state["profile"].seen_question_counts.keys())
@@ -213,7 +227,6 @@ def database_retriever_node(state: AdaptiveTestState) -> dict:
             if len(found_questions) >= target:
                 break 
                 
-            # Combine all IDs to completely block duplicates
             current_exclude_ids = existing_ids + seen_history + external_exclude_ids + [fq.id for fq in found_questions]
             
             q = retrieve_best_question(
@@ -255,10 +268,17 @@ def generator_node(state: AdaptiveTestState) -> dict:
 
     batch_context = ""
     
+    # 👉 THE FIX: Determine if Search is needed based on dynamic subjects
+    dynamic_keywords = ["current affairs", "general awareness", "economy", "science & tech", "banking", "finance", "government schemes"]
+    needs_search = False
+    
     if rejected:
         batch_context += "REGENERATING REJECTED QUESTIONS:\n"
         for r in rejected:
             batch_context += f"- Sub-Topic: {r.get('sub_topic', 'Unknown')} | Feedback: {r['feedback']}\n"
+            # If a rejected question was from a dynamic topic, we still need search
+            if any(k in r.get('sub_topic', '').lower() for k in dynamic_keywords):
+                needs_search = True
         num_to_generate = len(rejected)
     else:
         existing_counts = {}
@@ -276,17 +296,43 @@ def generator_node(state: AdaptiveTestState) -> dict:
                 batch_context += f"- Subject: {req.subject} | Topic: {req.topic} | Sub-Topic: {req.sub_topic} | Difficulty: {req.target_difficulty} | Shared Context Required: {req.requires_shared_context} | Quantity: {take}\n"
                 slots_left -= take
                 actual_take_sum += take
+                
+                # Check if this specific requirement warrants a live web search
+                if any(k in req.subject.lower() or k in req.topic.lower() for k in dynamic_keywords):
+                    needs_search = True
 
         num_to_generate = actual_take_sum
         
     if num_to_generate <= 0:
         return {"draft_batch": []}
 
+    # 👉 THE FIX: Calculate rolling time window dynamically
+    now = datetime.now()
+    current_year = now.year
+    current_month = now.strftime("%B")
+    prev_year = current_year - 1
+    time_window = f"January {prev_year} up to {current_month} {current_year}"
+
+    # 👉 THE FIX: Inject search-specific rules vs static rules
+    search_instructions = ""
+    if needs_search:
+        search_instructions = f"""
+        CRITICAL INSTRUCTION - DYNAMIC KNOWLEDGE REQUIRED:
+        This batch contains topics that require up-to-date information. You MUST use your Google Search tool to fetch recent data, facts, and policy changes strictly from the time window: {time_window} before drafting the questions.
+        """
+    else:
+        search_instructions = """
+        CRITICAL INSTRUCTION - STATIC KNOWLEDGE:
+        This batch relies on static, fundamental principles. Rely entirely on your internal knowledge base. Do NOT search the web or hallucinate recent news.
+        """
+
     prompt = f"""
     You are the Senior Content Creator for the {state['profile'].target_exam} exam.
     Generate EXACTLY {num_to_generate} questions.
     
     {batch_context}
+    
+    {search_instructions}
     
     SHARED CONTEXT RULES:
     If a requirement specifies "Shared Context Required: True", you MUST generate ONE shared passage PER TOPIC and place it inside the "shared_context" field for EVERY related question.
@@ -311,13 +357,21 @@ def generator_node(state: AdaptiveTestState) -> dict:
     ]
     """
     
-    print(f"✍️ Generator: Drafting {num_to_generate} questions (Attempt {attempts + 1})...")
+    print(f"✍️ Generator: Drafting {num_to_generate} questions (Attempt {attempts + 1}). Live Search Enabled: {needs_search}")
     
     try:
+        # 👉 THE FIX: Dynamically build the config payload to toggle the tool
+        config_kwargs = {
+            "temperature": 0.4,
+            "response_mime_type": "application/json"
+        }
+        if needs_search:
+            config_kwargs["tools"] = [{'google_search': {}}]
+            
         response = client.models.generate_content(
             model='gemini-3.1-pro-preview',
             contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.4, response_mime_type="application/json")
+            config=types.GenerateContentConfig(**config_kwargs)
         )
         
         raw_json_array = json.loads(clean_json_response(response.text))
@@ -336,7 +390,9 @@ def generator_node(state: AdaptiveTestState) -> dict:
             sub_topic = str(meta.get("sub_topic", "General")).strip().title()
             meta["sub_topic"] = sub_topic
             meta["exam"] = state["profile"].target_exam
-            meta["ttl_days"] = 180 if "Current" in meta.get("subject", "") else None
+            
+            # Attach TTL metadata for OpenSearch pruning
+            meta["ttl_days"] = 180 if any(k in meta.get("subject", "").lower() for k in dynamic_keywords) else None
             
             is_official = False
             for subj, topics in exam_map.items():
