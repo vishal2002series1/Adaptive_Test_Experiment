@@ -176,34 +176,28 @@ def lambda_handler(event, context):
                         
                         exclude_ids = [q['id'] for q in pending_qs]
                         
-                        # Create a temporary config for just the missing questions
-                        delta_config = TestConfig(
-                            target_subject=config.target_subject,
-                            target_topic=config.target_topic,
-                            target_difficulty=config.target_difficulty, 
-                            num_questions=delta,
-                            adaptive_mode=config.adaptive_mode,
-                            override_topics=config.override_topics 
-                        )
+                        # 👉 THE FIX: Rehydrate the Pydantic objects to inject memory into LangGraph
+                        pending_objects = [Question(**q) for q in pending_qs]
                         
                         initial_state = {
                             "profile": student,
-                            "config": delta_config,
+                            "config": config, # Pass the FULL config, not a delta config
                             "current_question_index": 0,
                             "generation_attempts": 0,
-                            "selected_questions": [],
+                            "selected_questions": pending_objects, # 👉 THE FIX: Inject memory!
                             "draft_batch": [],
                             "rejected_batch": [],
                             "current_batch_target": delta,
                             "exploitation_topics": start_exploitation, 
                             "exploration_topics": [],
-                            "exclude_ids": exclude_ids # Passed to Librarian via GraphState
+                            "exclude_ids": exclude_ids
                         }
                         
                         final_state = generator_app.invoke(initial_state)
-                        new_qs = [q.model_dump() for q in final_state.get("selected_questions", [])]
                         
-                        output_test = pending_qs + new_qs
+                        # Graph handles the concatenation natively now
+                        output_test = [q.model_dump() for q in final_state.get("selected_questions", [])]
+                        
                         save_pending_test(student_id, target_exam, config_data, output_test)
                         
                         return _build_response({

@@ -307,6 +307,7 @@ def generator_node(state: AdaptiveTestState) -> dict:
         return {"draft_batch": []}
 
     # 👉 THE FIX: Calculate rolling time window dynamically
+    # 👉 THE FIX: Calculate rolling time window dynamically
     now = datetime.now()
     current_year = now.year
     current_month = now.strftime("%B")
@@ -326,6 +327,12 @@ def generator_node(state: AdaptiveTestState) -> dict:
         This batch relies on static, fundamental principles. Rely entirely on your internal knowledge base. Do NOT search the web or hallucinate recent news.
         """
 
+    # 👉 THE FIX: Inject existing question memory to prevent in-loop amnesia
+    existing_texts = [q.text for q in state.get("selected_questions", [])]
+    avoid_context = ""
+    if existing_texts:
+        avoid_context = "CRITICAL AVOIDANCE - DO NOT REPEAT THESE QUESTIONS:\n" + "\n".join([f"- {t}" for t in existing_texts])
+
     prompt = f"""
     You are the Senior Content Creator for the {state['profile'].target_exam} exam.
     Generate EXACTLY {num_to_generate} questions.
@@ -333,6 +340,8 @@ def generator_node(state: AdaptiveTestState) -> dict:
     {batch_context}
     
     {search_instructions}
+    
+    {avoid_context}
     
     SHARED CONTEXT RULES:
     If a requirement specifies "Shared Context Required: True", you MUST generate ONE shared passage PER TOPIC and place it inside the "shared_context" field for EVERY related question.
