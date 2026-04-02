@@ -341,7 +341,7 @@ def generator_node(state: AdaptiveTestState) -> dict:
     
     {search_instructions}
     
-    {avoid_context}
+    {avoid_context}y
     
     SHARED CONTEXT RULES:
     If a requirement specifies "Shared Context Required: True", you MUST generate ONE shared passage PER TOPIC and place it inside the "shared_context" field for EVERY related question.
