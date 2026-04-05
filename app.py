@@ -63,7 +63,7 @@ def lambda_handler(event, context):
             })
 
         # ==========================================
-        # 👉 NEW ROUTE 0.5: FETCH ALL PROFILES (DASHBOARD)
+        # ROUTE 0.5: FETCH ALL PROFILES (DASHBOARD)
         # ==========================================
         elif action == 'get_all_profiles':
             print(f"📊 Fetching all active profiles for {student_id}")
@@ -122,6 +122,143 @@ def lambda_handler(event, context):
                 'workbook': final_wb_state['final_workbook'].model_dump()
             })
 
+        # ==========================================
+        # NEW ROUTE: FETCH EXAM SYLLABUS
+        # ==========================================
+        elif action == 'get_syllabus':
+            exam_name = body.get('exam_name', target_exam)
+            print(f"📖 Fetching syllabus for {exam_name}")
+            
+            try:
+                with open('syllabus_maps.json', 'r') as f:
+                    syllabus_data = json.load(f)
+                    
+                if exam_name in syllabus_data:
+                    return _build_response({
+                        'message': 'Syllabus fetched successfully',
+                        'exam': exam_name,
+                        'syllabus': syllabus_data[exam_name]
+                    })
+                else:
+                    return _build_response({
+                        'error': f'Syllabus for {exam_name} not found in syllabus_maps.json'
+                    }, status_code=404)
+            except FileNotFoundError:
+                return _build_response({'error': 'syllabus_maps.json file missing'}, status_code=500)
+
+        # ==========================================
+        # NEW ROUTE: FETCH STRUCTURED PROGRESS TREE
+        # ==========================================
+        # ==========================================
+        # UPGRADED ROUTE: FETCH STRUCTURED PROGRESS TREE
+        # ==========================================
+        elif action == 'get_progress_tree':
+            print(f"🌳 Fetching structured progress tree for {student_id} ({target_exam})")
+            
+            try:
+                with open('syllabus_maps.json', 'r') as f:
+                    syllabus_data = json.load(f)
+            except FileNotFoundError:
+                return _build_response({'error': 'syllabus_maps.json file missing'}, status_code=500)
+                
+            exam_syllabus = syllabus_data.get(target_exam)
+            if not exam_syllabus:
+                return _build_response({'error': f'Syllabus for {target_exam} not found'}, status_code=404)
+
+            # 1. Fast lookup dictionary for subtopics
+            prof_lookup = {}
+            for p in student.proficiencies:
+                key = (p.subject, p.topic, p.sub_topic)
+                prof_lookup[key] = {
+                    "score": p.score,
+                    "questions_attempted": p.questions_attempted,
+                    "last_tested": p.last_tested
+                }
+            
+            # 2. Build Tree and Calculate Roll-Up Aggregations (Approach C: Bayesian 0.5 Prior)
+            progress_tree = []
+            total_syllabus_subtopics = 0
+            total_syllabus_score = 0.0
+            total_attempted_subtopics = 0
+
+            for subject, topics in exam_syllabus.items():
+                subject_node = {
+                    "subject": subject,
+                    "subject_score": 0.0,
+                    "subject_coverage_pct": 0.0,
+                    "topics": []
+                }
+                subject_subtopic_count = 0
+                subject_score_sum = 0.0
+                subject_attempted_count = 0
+
+                for topic, sub_topics in topics.items():
+                    topic_node = {
+                        "topic": topic,
+                        "topic_score": 0.0,
+                        "topic_coverage_pct": 0.0,
+                        "sub_topics": []
+                    }
+                    topic_subtopic_count = len(sub_topics)
+                    topic_score_sum = 0.0
+                    topic_attempted_count = 0
+
+                    for sub_topic in sub_topics:
+                        total_syllabus_subtopics += 1
+                        lookup_key = (subject, topic, sub_topic)
+                        
+                        # APPROACH C IMPLEMENTATION: Default unseen score is 0.5
+                        stats = prof_lookup.get(lookup_key, {
+                            "score": 0.5, # <-- THE BAYESIAN PRIOR
+                            "questions_attempted": 0,
+                            "last_tested": None
+                        })
+                        
+                        if stats["questions_attempted"] > 0:
+                            topic_attempted_count += 1
+                            total_attempted_subtopics += 1
+                            subject_attempted_count += 1
+
+                        # Add to Topic Sums
+                        topic_score_sum += stats["score"]
+                        topic_node["sub_topics"].append({
+                            "sub_topic": sub_topic,
+                            "progress": stats
+                        })
+
+                    # Calculate Topic Average & Coverage
+                    if topic_subtopic_count > 0:
+                        topic_node["topic_score"] = topic_score_sum / topic_subtopic_count
+                        topic_node["topic_coverage_pct"] = (topic_attempted_count / topic_subtopic_count) * 100
+                    
+                    subject_node["topics"].append(topic_node)
+                    
+                    # Roll up to Subject Sums
+                    subject_subtopic_count += topic_subtopic_count
+                    subject_score_sum += topic_score_sum
+
+                # Calculate Subject Average & Coverage
+                if subject_subtopic_count > 0:
+                    subject_node["subject_score"] = subject_score_sum / subject_subtopic_count
+                    subject_node["subject_coverage_pct"] = (subject_attempted_count / subject_subtopic_count) * 100
+                
+                progress_tree.append(subject_node)
+                
+                # Roll up to Global Sums
+                total_syllabus_score += subject_score_sum
+
+            # 3. Calculate True Overall Readiness (Syllabus Coverage Weighted with 0.5 baseline)
+            true_overall_readiness = (total_syllabus_score / total_syllabus_subtopics) if total_syllabus_subtopics > 0 else 0.5
+            overall_coverage_pct = (total_attempted_subtopics / total_syllabus_subtopics) * 100 if total_syllabus_subtopics > 0 else 0.0
+
+            return _build_response({
+                'message': 'Progress tree constructed successfully',
+                'true_overall_readiness': true_overall_readiness,
+                'overall_coverage_pct': overall_coverage_pct,
+                'total_syllabus_nodes': total_syllabus_subtopics,
+                'attempted_nodes': total_attempted_subtopics,
+                'progress_tree': progress_tree
+            })
         # ==========================================
         # ROUTE 3: TEST GENERATION & INTERCEPTOR
         # ==========================================
