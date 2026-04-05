@@ -10,6 +10,13 @@ from schema import StudentProfile, ProficiencyRecord
 
 dynamodb = boto3.resource('dynamodb', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
 
+# 👉 ADDED: Custom JSON Encoder to handle Boto3's Decimal objects
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else float(obj)
+        return super(DecimalEncoder, self).default(obj)
+
 # 1. Existing Profile Table
 TABLE_NAME = os.environ.get('STUDENT_TABLE', 'AdaptiveStudentProfiles') 
 table = dynamodb.Table(TABLE_NAME)
@@ -62,7 +69,8 @@ def save_student_profile(profile: StudentProfile) -> bool:
     """Saves the updated student profile back to DynamoDB."""
     try:
         item = profile.model_dump()
-        dynamo_item = json.loads(json.dumps(item), parse_float=Decimal)
+        # 👉 THE FIX: Added cls=DecimalEncoder
+        dynamo_item = json.loads(json.dumps(item, cls=DecimalEncoder), parse_float=Decimal)
         
         table.put_item(Item=dynamo_item)
         print(f"💾 Successfully saved {profile.target_exam} profile for {profile.student_id} to DynamoDB.")
@@ -101,7 +109,8 @@ def save_test_history(student_id: str, exam: str, score: float, graded_results: 
             "study_plan": study_plan
         }
         
-        dynamo_item = json.loads(json.dumps(history_record), parse_float=Decimal)
+        # 👉 THE FIX: Added cls=DecimalEncoder
+        dynamo_item = json.loads(json.dumps(history_record, cls=DecimalEncoder), parse_float=Decimal)
         
         history_table.put_item(Item=dynamo_item)
         print(f"💾 Permanently saved test history log for {student_id} to DynamoDB.")
@@ -178,7 +187,8 @@ def save_cached_workbook(workbook_dict: Dict[str, Any]) -> bool:
             workbook_dict['expires_at'] = int(time.time()) + (1825 * 86400)
             print("⏱️ Static topic detected. Workbook cached with 5-year TTL.")
         
-        dynamo_item = json.loads(json.dumps(workbook_dict), parse_float=Decimal)
+        # 👉 THE FIX: Added cls=DecimalEncoder
+        dynamo_item = json.loads(json.dumps(workbook_dict, cls=DecimalEncoder), parse_float=Decimal)
         
         workbook_table.put_item(Item=dynamo_item)
         print(f"💾 Permanently cached workbook '{topic_key}' to DynamoDB.")
@@ -206,7 +216,9 @@ def save_pending_test(student_id: str, target_exam: str, test_config: Dict[str, 
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
-        dynamo_item = json.loads(json.dumps(pending_record), parse_float=Decimal)
+        # 👉 THE FIX: Added cls=DecimalEncoder
+        dynamo_item = json.loads(json.dumps(pending_record, cls=DecimalEncoder), parse_float=Decimal)
+        
         pending_tests_table.put_item(Item=dynamo_item)
         print(f"💾 Saved pending test for {student_id} ({target_exam}). Expires in {expiry_hours} hour(s).")
         return True
