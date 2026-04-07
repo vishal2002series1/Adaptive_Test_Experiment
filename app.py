@@ -147,9 +147,6 @@ def lambda_handler(event, context):
                 return _build_response({'error': 'syllabus_maps.json file missing'}, status_code=500)
 
         # ==========================================
-        # NEW ROUTE: FETCH STRUCTURED PROGRESS TREE
-        # ==========================================
-        # ==========================================
         # UPGRADED ROUTE: FETCH STRUCTURED PROGRESS TREE
         # ==========================================
         elif action == 'get_progress_tree':
@@ -165,10 +162,11 @@ def lambda_handler(event, context):
             if not exam_syllabus:
                 return _build_response({'error': f'Syllabus for {target_exam} not found'}, status_code=404)
 
-            # 1. Fast lookup dictionary for subtopics
+            # 1. Fast lookup dictionary for subtopics (Resilient Case-Insensitive Matching)
             prof_lookup = {}
             for p in student.proficiencies:
-                key = (p.subject, p.topic, p.sub_topic)
+                # We lowercase and strip the sub_topic to protect against LLM casing changes
+                key = p.sub_topic.strip().lower()
                 prof_lookup[key] = {
                     "score": p.score,
                     "questions_attempted": p.questions_attempted,
@@ -205,7 +203,9 @@ def lambda_handler(event, context):
 
                     for sub_topic in sub_topics:
                         total_syllabus_subtopics += 1
-                        lookup_key = (subject, topic, sub_topic)
+                        
+                        # 👉 THE FIX: Normalize the syllabus key to match the database key
+                        lookup_key = sub_topic.strip().lower()
                         
                         # APPROACH C IMPLEMENTATION: Default unseen score is 0.5
                         stats = prof_lookup.get(lookup_key, {
@@ -259,6 +259,7 @@ def lambda_handler(event, context):
                 'attempted_nodes': total_attempted_subtopics,
                 'progress_tree': progress_tree
             })
+            
         # ==========================================
         # ROUTE 3: TEST GENERATION & INTERCEPTOR
         # ==========================================
