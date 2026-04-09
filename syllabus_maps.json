@@ -1430,6 +1430,7 @@
       ]
     }
   },
+
   "Lean Six Sigma Black Belt (IASSC)": {
     "Enterprise-Wide Deployment": {
       "Enterprise-Wide View": [
@@ -1525,37 +1526,46 @@
         "Simple & Multiple Linear Regression – R², Residual Analysis, Multicollinearity"
       ]
     },
-    "Improve Phase": [
-      "Design of Experiments (DOE) – Terminology (Factors, Levels, Responses, Runs)",
-      "Full Factorial Experiments – Main Effects, Interaction Effects, Confounding",
-      "Fractional Factorial Experiments – Resolution III, IV, V; Aliasing",
-      "Plackett-Burman Designs – Screening Experiments",
-      "Response Surface Methodology (RSM) – Central Composite, Box-Behnken Designs",
-      "Taguchi Methods – Signal-to-Noise Ratio, Loss Function, Orthogonal Arrays",
-      "EVOP (Evolutionary Operation) – Process Optimisation",
-      "Lean Tools – 5S, Kaizen, Kanban, Poka-Yoke (Mistake Proofing), SMED",
-      "Setup Reduction – Internal vs External Setup, SMED Steps",
-      "Pull Systems – Kanban Sizing, Supermarket Pull, FIFO Lanes",
-      "Theory of Constraints (TOC) – Bottleneck Identification, Drum-Buffer-Rope",
-      "Solution Selection – Pugh Matrix, Weighted Decision Matrix",
-      "Pilot Planning – Piloting, Simulation, Risk Mitigation"
-    ],
-    "Control Phase": [
-      "Statistical Process Control (SPC) – Control Chart Selection Guide",
-      "Variable Control Charts – X̄-R Chart, X̄-S Chart, I-MR Chart",
-      "Attribute Control Charts – p-chart, np-chart, c-chart, u-chart",
-      "Control Chart Interpretation – Western Electric Rules, Nelson Rules",
-      "Process Capability Post-improvement – Cp, Cpk Validation",
-      "Control Plans – Key Control Points, Reaction Plans, Responsible Parties",
-      "Standard Operating Procedures (SOPs) – Writing, Training, Compliance",
-      "Visual Management – Dashboards, Andon, Shadow Boards",
-      "Mistake Proofing (Poka-Yoke) – Contact, Fixed-value, Motion-step Methods",
-      "Training & Knowledge Transfer – Cross-training, Documentation",
-      "Sustaining Gains – Monitoring Plans, Audit Schedules",
-      "Project Closure – Financial Validation, Lessons Learned, Handoff to Process Owner",
-      "Replication Opportunities – Applying Solutions to Similar Processes"
-    ]
+    "Improve Phase": {
+      "Design of Experiments (DOE)": [
+        "Design of Experiments (DOE) – Terminology (Factors, Levels, Responses, Runs)",
+        "Full Factorial Experiments – Main Effects, Interaction Effects, Confounding",
+        "Fractional Factorial Experiments – Resolution III, IV, V; Aliasing",
+        "Plackett-Burman Designs – Screening Experiments",
+        "Response Surface Methodology (RSM) – Central Composite, Box-Behnken Designs",
+        "Taguchi Methods – Signal-to-Noise Ratio, Loss Function, Orthogonal Arrays",
+        "EVOP (Evolutionary Operation) – Process Optimisation"
+      ],
+      "Lean Improvement Tools": [
+        "Lean Tools – 5S, Kaizen, Kanban, Poka-Yoke (Mistake Proofing), SMED",
+        "Setup Reduction – Internal vs External Setup, SMED Steps",
+        "Pull Systems – Kanban Sizing, Supermarket Pull, FIFO Lanes",
+        "Theory of Constraints (TOC) – Bottleneck Identification, Drum-Buffer-Rope",
+        "Solution Selection – Pugh Matrix, Weighted Decision Matrix",
+        "Pilot Planning – Piloting, Simulation, Risk Mitigation"
+      ]
+    },
+    "Control Phase": {
+      "Statistical Process Control (SPC)": [
+        "Statistical Process Control (SPC) – Control Chart Selection Guide",
+        "Variable Control Charts – X̄-R Chart, X̄-S Chart, I-MR Chart",
+        "Attribute Control Charts – p-chart, np-chart, c-chart, u-chart",
+        "Control Chart Interpretation – Western Electric Rules, Nelson Rules",
+        "Process Capability Post-improvement – Cp, Cpk Validation"
+      ],
+      "Sustaining & Closing": [
+        "Control Plans – Key Control Points, Reaction Plans, Responsible Parties",
+        "Standard Operating Procedures (SOPs) – Writing, Training, Compliance",
+        "Visual Management – Dashboards, Andon, Shadow Boards",
+        "Mistake Proofing (Poka-Yoke) – Contact, Fixed-value, Motion-step Methods",
+        "Training & Knowledge Transfer – Cross-training, Documentation",
+        "Sustaining Gains – Monitoring Plans, Audit Schedules",
+        "Project Closure – Financial Validation, Lessons Learned, Handoff to Process Owner",
+        "Replication Opportunities – Applying Solutions to Similar Processes"
+      ]
+    }
   },
+
   "Microsoft Azure Administrator (AZ-104)": {
     "Manage Azure Identities & Governance": {
       "Azure Active Directory (Entra ID)": [
@@ -1671,6 +1681,7 @@
       ]
     }
   },
+
   "Microsoft Power BI Data Analyst (PL-300)": {
     "Prepare the Data": {
       "Get Data": [
@@ -1790,6 +1801,7 @@
       ]
     }
   },
+
   "Google Cloud Associate Cloud Engineer": {
     "Setting Up a Cloud Solution Environment": {
       "Cloud Projects & Billing": [
@@ -1885,19 +1897,22 @@
         "SLIs, SLOs & SLAs – Error Budget Concepts"
       ]
     },
-    "Configuring Access & Security": [
-      "Cloud IAM Best Practices – Least Privilege, Separation of Duties, Resource Hierarchy",
-      "Service Accounts – Types, Keys, Workload Identity Federation",
-      "IAM Conditions – Attribute-based Access Control",
-      "Audit Logs – Admin Activity, Data Access, System Event, Policy Denied Logs",
-      "Cloud Armor – Security Policies, WAF Rules, Adaptive Protection, Rate Limiting",
-      "Cloud KMS – Key Rings, Keys, Versions, CMEK, CSEK",
-      "Secret Manager – Secret Versions, IAM, Rotation, Replication",
-      "Binary Authorization – Attestation for GKE",
-      "VPC Service Controls – Perimeters, Access Policies",
-      "Chronicle SIEM & Security Command Center (SCC) – Findings, Assets, Compliance"
-    ]
+    "Configuring Access & Security": {
+      "IAM, Keys & Security Services": [
+        "Cloud IAM Best Practices – Least Privilege, Separation of Duties, Resource Hierarchy",
+        "Service Accounts – Types, Keys, Workload Identity Federation",
+        "IAM Conditions – Attribute-based Access Control",
+        "Audit Logs – Admin Activity, Data Access, System Event, Policy Denied Logs",
+        "Cloud Armor – Security Policies, WAF Rules, Adaptive Protection, Rate Limiting",
+        "Cloud KMS – Key Rings, Keys, Versions, CMEK, CSEK",
+        "Secret Manager – Secret Versions, IAM, Rotation, Replication",
+        "Binary Authorization – Attestation for GKE",
+        "VPC Service Controls – Perimeters, Access Policies",
+        "Chronicle SIEM & Security Command Center (SCC) – Findings, Assets, Compliance"
+      ]
+    }
   },
+
   "PMI Project Management Professional (PMP)": {
     "Predictive (Waterfall) Project Environments": {
       "Project Initiation": [
