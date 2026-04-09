@@ -134,29 +134,24 @@ def designer_node(state: WorkbookState) -> dict:
     print(f"🎨 Designer: Creating Interactive Markmap hierarchy...")
     
     prompt = f"""
-    You are an expert educational data visualizer. 
-    Your task is to create a comprehensive, highly readable Mind Map for the topic: {state['sub_topic']} (Context: {state['target_exam']}).
+    You are an expert educational data visualizer preparing high-yield study materials for the {state['target_exam']} exam. 
+    Your task is to create a highly focused, readable Mind Map for the following exact syllabus concept:
+    
+    Taxonomy: {state['subject']} > {state['topic']} > {state['sub_topic']}
+    
+    CRITICAL INSTRUCTIONS:
+    1. Strict Exam Alignment: You must anchor the mind map strictly to the context of the '{state['target_exam']}' exam. 
+    2. No Domain Drift: Keep the content exclusively focused on the provided taxonomy. Do not hallucinate or drift into unrelated subjects, frameworks, or domains that fall outside of '{state['subject']}' and '{state['topic']}'.
+    3. Exam Utility: Ensure the nodes highlight the most testable concepts, relationships, mechanisms, or distinctions that a student must memorize to crack this specific exam.
     
     Instead of code, you must output a pure Nested Markdown List. 
     
     RULES:
-    1. Start with a single H1 (#) representing the core topic.
-    2. Use H2 (##) for main branches (e.g., Causes, Types, Impacts).
+    1. Start with a single H1 (#) representing the core topic ({state['sub_topic']}).
+    2. Use H2 (##) for main branches (e.g., Core Principles, Components, Frameworks, Causes).
     3. Use H3 (###) and bullet points (-) for deeper details.
     4. Keep node text concise (1-5 words). If you need to explain more, nest it deeper.
     5. ONLY output the markdown list. Do not include introductory text.
-    
-    EXAMPLE FORMAT:
-    # Inflation
-    ## Causes
-    ### Demand-Pull
-    - High Money Supply
-    - Population Growth
-    ### Cost-Push
-    - Supply Chain Shocks
-    ## Types
-    ### Creeping
-    - Less than 3%
     """
     try:
         response = client.models.generate_content(
@@ -164,7 +159,7 @@ def designer_node(state: WorkbookState) -> dict:
             contents=prompt,
             config=types.GenerateContentConfig(temperature=0.2)
         )
-        # We don't need clean_json_response here because it's just raw markdown!
+        
         markdown_mindmap = response.text.strip()
         
         # Clean up stray backticks if the LLM wraps it in a markdown block
@@ -179,7 +174,6 @@ def designer_node(state: WorkbookState) -> dict:
     except Exception as e:
         print(f"❌ Designer Error: {e}")
         return {"mermaid_graph_code": "# Error\n## Failed to load mind map"}
-
 # 👉 UPDATED: Curator now extracts and returns the full question dictionary
 def curator_node(state: WorkbookState) -> dict:
     print(f"🗂️ Curator: Fetching practice questions from Vector DB...")
