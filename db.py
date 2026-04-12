@@ -2,6 +2,7 @@ import os
 import time
 import boto3
 import json
+import base64
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, Any, List, Optional
@@ -32,6 +33,53 @@ workbook_table = dynamodb.Table(WORKBOOK_TABLE_NAME)
 # 4. Pending Tests Table
 PENDING_TESTS_TABLE_NAME = os.environ.get('PENDING_TESTS_TABLE', 'AdaptivePendingTests')
 pending_tests_table = dynamodb.Table(PENDING_TESTS_TABLE_NAME)
+
+# Initialize S3 Client
+s3_client = boto3.client('s3')
+IMAGES_BUCKET = os.environ.get('IMAGES_BUCKET')
+QUESTION_BANK_TABLE = os.environ.get('QUESTION_BANK_TABLE')
+
+def save_master_question(q_data):
+    """Uploads image to S3 (if present) and saves the raw JSON to the Master DynamoDB Table."""
+    # 1. Handle S3 Image Upload
+    if q_data.get('image_base64') and q_data.get('image_filename'):
+        # Decode the base64 string back into raw image bytes
+        image_bytes = base64.b64decode(q_data['image_base64'])
+        object_key = f"diagrams/{q_data['id']}/{q_data['image_filename']}"
+        content_type = 'image/svg+xml' if object_key.endswith('.svg') else 'image/png'
+        
+        # Upload to S3
+        s3_client.put_object(
+            Bucket=IMAGES_BUCKET,
+            Key=object_key,
+            Body=image_bytes,
+            ContentType=content_type
+        )
+        
+        # Remove the heavy base64 string from the payload before saving to DB
+        del q_data['image_base64']
+        del q_data['image_filename']
+        q_data['s3_image_key'] = object_key # Save the S3 reference!
+
+    # 2. Save to DynamoDB
+    if QUESTION_BANK_TABLE:
+        table = dynamodb.Table(QUESTION_BANK_TABLE)
+        # Convert standard floats to DynamoDB Decimals
+        item = json.loads(json.dumps(q_data), parse_float=Decimal)
+        table.put_item(Item=item)
+
+def get_presigned_url(s3_key: str, expiration=36000) -> Optional[str]:
+    """Generates a temporary, secure URL for the frontend to render the S3 image."""
+    if not s3_key or not IMAGES_BUCKET: 
+        return None
+    try:
+        response = s3_client.generate_presigned_url('get_object',
+                                                    Params={'Bucket': IMAGES_BUCKET, 'Key': s3_key},
+                                                    ExpiresIn=expiration)
+        return response
+    except Exception as e:
+        print(f"⚠️ Error generating presigned URL for {s3_key}: {e}")
+        return None
 
 
 def get_student_profile(student_id: str, target_exam: str) -> StudentProfile:

@@ -79,7 +79,38 @@ Resources:
         AttributeName: expires_at
         Enabled: true
 
-  # 5. OpenSearch Serverless (Vector DB for Option A)
+  # 5. DynamoDB Table for Master Question Bank
+  QuestionBankTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AdaptiveQuestionBank
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # 6. S3 Bucket for Question Diagrams/Images
+  QuestionImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "adaptive-test-images-${AWS::AccountId}-${AWS::Region}"
+      # Security: Block public access. We will use secure Pre-signed URLs for the UI.
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET]
+            AllowedOrigins: ['*']
+            MaxAge: 3600
+
+  # 7. OpenSearch Serverless (Vector DB for Option A)
   OptionAVectorDB:
     Type: AWS::OpenSearchServerless::Collection
     DependsOn: [VectorEncryptionPolicy, VectorNetworkPolicy]
@@ -102,7 +133,7 @@ Resources:
       Type: "network"
       Policy: '[{"Rules":[{"ResourceType":"collection","Resource":["collection/option-a-vector-db"]}],"AllowFromPublic":true}]'
 
-  # 6. The LangGraph Multi-Agent Lambda Function
+  # 8. The LangGraph Multi-Agent Lambda Function
   TestGeneratorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -117,8 +148,10 @@ Resources:
           HISTORY_TABLE: !Ref TestHistoryTable 
           WORKBOOK_TABLE: !Ref WorkbookCacheTable
           PENDING_TESTS_TABLE: !Ref PendingTestsTable 
+          QUESTION_BANK_TABLE: !Ref QuestionBankTable      # <-- NEW
+          IMAGES_BUCKET: !Ref QuestionImagesBucket         # <-- NEW
           OPENSEARCH_ENDPOINT: !GetAtt OptionAVectorDB.CollectionEndpoint
-          GEMINI_API_KEY: "placeholder-key" # 🚨 PUT YOUR REAL API KEY HERE!
+          GEMINI_API_KEY: "AIzaSyB-b6HTBUgPMafMIEQF1th_463JA7qglbM" # 🚨 PUT YOUR REAL API KEY HERE!
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref StudentProfileTable
@@ -128,6 +161,10 @@ Resources:
             TableName: !Ref WorkbookCacheTable
         - DynamoDBCrudPolicy:
             TableName: !Ref PendingTestsTable
+        - DynamoDBCrudPolicy:                              # <-- NEW
+            TableName: !Ref QuestionBankTable              # <-- NEW
+        - S3CrudPolicy:                                    # <-- NEW
+            BucketName: !Ref QuestionImagesBucket          # <-- NEW
         - Statement:
             - Effect: Allow
               Action:

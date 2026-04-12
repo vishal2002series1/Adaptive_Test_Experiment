@@ -224,7 +224,7 @@ def retrieve_best_question(
         query["query"]["bool"]["must"].append({"term": {"topic": target_topic}})
         
     if target_sub_topic and target_sub_topic not in ["All Syllabus", "General"]:
-        clean_sub_topic = str(target_sub_topic).strip().title()
+        clean_sub_topic = str(target_sub_topic).strip()
         query["query"]["bool"]["must"].append({"term": {"sub_topic": clean_sub_topic}})
 
     if target_difficulty is not None:

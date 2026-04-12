@@ -4,8 +4,9 @@ from schema import StudentProfile, TestConfig, Question
 from graph import app as generator_app
 from evaluator_graph import evaluator_app 
 from workbook_graph import workbook_app
+from vector_store import save_questions_to_db
 
-# 👉 THE FIX: Added get_all_student_profiles to the import list
+# 👉 THE FIX: Added get_presigned_url to the import list
 from db import (
     get_student_profile, 
     get_all_student_profiles,
@@ -13,7 +14,9 @@ from db import (
     get_cached_workbook,
     save_pending_test,
     get_pending_test,
-    delete_pending_test
+    delete_pending_test,
+    save_master_question,
+    get_presigned_url
 )
 
 class DecimalEncoder(json.JSONEncoder):
@@ -145,6 +148,33 @@ def lambda_handler(event, context):
                     }, status_code=404)
             except FileNotFoundError:
                 return _build_response({'error': 'syllabus_maps.json file missing'}, status_code=500)
+                
+        # ==========================================
+        # NEW ROUTE: INGEST HITL QUESTIONS
+        # ==========================================
+        elif action == 'ingest_questions':
+            questions_data = body.get('questions', [])
+            print(f"📥 Received {len(questions_data)} approved questions for ingestion.")
+            
+            success_count = 0
+            for q_dict in questions_data:
+                try:
+                    # 1. Upload to S3 & Save to Master DynamoDB
+                    save_master_question(q_dict)
+                    
+                    # 2. Rehydrate into Pydantic model
+                    q_obj = Question(**q_dict) 
+                    
+                    # 3. Embed & Insert into OpenSearch Vector DB (reuses your existing logic!)
+                    save_questions_to_db([q_obj])
+                    
+                    success_count += 1
+                except Exception as e:
+                    print(f"⚠️ Failed to ingest question {q_dict.get('id')}: {e}")
+                    
+            return _build_response({
+                'message': f'Successfully ingested {success_count} out of {len(questions_data)} questions into the master bank and Vector DB.'
+            })
 
         # ==========================================
         # UPGRADED ROUTE: FETCH STRUCTURED PROGRESS TREE
@@ -300,6 +330,12 @@ def lambda_handler(event, context):
                         # ⚡ INSTANT RESUME (Cost: $0)
                         print(f"🔄 Resuming session: Slicing {r_len} questions from {p_len} pending.")
                         output_test = pending_qs[:r_len]
+                        
+                        # 👉 THE FIX: Attach temporary S3 URLs for rendering images
+                        for q in output_test:
+                            if q.get('s3_image_key'):
+                                q['presigned_image_url'] = get_presigned_url(q['s3_image_key'])
+                                
                         save_pending_test(student_id, target_exam, config_data, output_test)
                         
                         return _build_response({
@@ -314,15 +350,15 @@ def lambda_handler(event, context):
                         
                         exclude_ids = [q['id'] for q in pending_qs]
                         
-                        # 👉 THE FIX: Rehydrate the Pydantic objects to inject memory into LangGraph
+                        # Rehydrate the Pydantic objects to inject memory into LangGraph
                         pending_objects = [Question(**q) for q in pending_qs]
                         
                         initial_state = {
                             "profile": student,
-                            "config": config, # Pass the FULL config, not a delta config
+                            "config": config, 
                             "current_question_index": 0,
                             "generation_attempts": 0,
-                            "selected_questions": pending_objects, # 👉 THE FIX: Inject memory!
+                            "selected_questions": pending_objects, 
                             "draft_batch": [],
                             "rejected_batch": [],
                             "current_batch_target": delta,
@@ -336,6 +372,11 @@ def lambda_handler(event, context):
                         # Graph handles the concatenation natively now
                         output_test = [q.model_dump() for q in final_state.get("selected_questions", [])]
                         
+                        # 👉 THE FIX: Attach temporary S3 URLs for rendering images
+                        for q in output_test:
+                            if q.get('s3_image_key'):
+                                q['presigned_image_url'] = get_presigned_url(q['s3_image_key'])
+                                
                         save_pending_test(student_id, target_exam, config_data, output_test)
                         
                         return _build_response({
@@ -366,6 +407,11 @@ def lambda_handler(event, context):
             
             output_test = [q.model_dump() for q in final_state.get("selected_questions", [])] 
             
+            # 👉 THE FIX: Attach temporary S3 URLs for rendering images
+            for q in output_test:
+                if q.get('s3_image_key'):
+                    q['presigned_image_url'] = get_presigned_url(q['s3_image_key'])
+                    
             # Save the fresh test to Pending cache
             save_pending_test(student_id, target_exam, config_data, output_test)
             

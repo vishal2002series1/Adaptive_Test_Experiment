@@ -29,7 +29,7 @@ class QuestionMetadata(BaseModel):
     # NEW: The Escape Hatch Tracker
     taxonomy_source: str = Field(default="official", description="'official' if from S3 JSON, 'llm_generated' if invented via escape hatch")
     
-    cognitive_skill: str = Field(description="e.g., Factual Recall, Analytical Reasoning")
+    cognitive_skill: Optional[str] = Field(default="Analytical Reasoning", description="e.g., Factual Recall, Analytical Reasoning")
     difficulty_level: int = Field(ge=1, le=5, description="1 (Beginner) to 5 (Exam-Ready)")
     ttl_days: Optional[int] = Field(default=None, description="Time-to-live in days. None for static subjects.")
     generation_date: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -42,6 +42,10 @@ class Question(BaseModel):
     correct_answer: str
     explanation: str = Field(description="Detailed explanation. MUST use $ for inline math and $$ for block math.")
     metadata: QuestionMetadata
+    Requires_Diagram: Optional[bool] = False
+    TikZ_Code: Optional[str] = None
+    s3_image_key: Optional[str] = None
+    local_image_path: Optional[str] = None
 
 class StudentProfile(BaseModel):
     student_id: str

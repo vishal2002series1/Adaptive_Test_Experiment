@@ -712,6 +712,8 @@ if st.session_state.admin_mode == "Student Platform":
                 rendered_contexts.add(context)
                 
             st.markdown(f"**Q{i+1}.** {format_latex(q['text'])}")
+            if q.get('Requires_Diagram') and q.get('presigned_image_url'):
+                st.image(q.get('presigned_image_url'), caption="Reference Diagram")
             options_list = [f"{key}: {format_latex(val)}" for key, val in q['options'].items()]
             
             choice = st.radio(
@@ -811,6 +813,11 @@ if st.session_state.admin_mode == "Student Platform":
                     st.caption("*(This question was part of a Shared Context Passage)*")
                     
                 st.markdown(f"**Question:** {format_latex(display_text)}")
+
+                if original_q and original_q.get('Requires_Diagram') and original_q.get('presigned_image_url'):
+                    st.image(original_q.get('presigned_image_url'), caption="Reference Diagram")
+
+                    
                 if result["is_correct"]:
                     st.success(f"✅ Your Answer: {result['student_answer']} (Correct)")
                 else:
@@ -974,10 +981,35 @@ elif st.session_state.admin_mode == "Admin Portal (HITL)":
         # 4. Final Submission
         accepted_count = sum(1 for v in st.session_state.review_decisions.values() if v == True)
         if st.button(f"📤 Submit {accepted_count} Accepted Questions to AWS", use_container_width=True, type="primary"):
-            st.info("Backend integration pending (Step 2). For now, your batch is safely tracked in the session state!")
             
-        if st.button("Reset Reviewer", use_container_width=True):
-            st.session_state.review_queue = []
-            st.session_state.review_decisions = {}
-            st.session_state.current_review_idx = 0
-            st.rerun()
+            if accepted_count == 0:
+                st.warning("No questions accepted yet!")
+            else:
+                import base64
+                
+                # Filter only accepted questions
+                payload_batch = [q for q in st.session_state.review_queue if st.session_state.review_decisions.get(q['id']) == True]
+                
+                with st.spinner("Encoding images and uploading to AWS..."):
+                    for q in payload_batch:
+                        # If image exists, encode it to Base64 to safely transmit over HTTP
+                        if q.get('Requires_Diagram') and q.get('local_image_path'):
+                            img_filename = os.path.basename(q['local_image_path'])
+                            img_path = os.path.join(TEMP_IMG_DIR, img_filename)
+                            
+                            if os.path.exists(img_path):
+                                with open(img_path, "rb") as f:
+                                    encoded = base64.b64encode(f.read()).decode("utf-8")
+                                    q['image_base64'] = encoded
+                                    q['image_filename'] = img_filename
+                                    
+                    # Send to Lambda
+                    try:
+                        res = requests.post(API_URL, json={"action": "ingest_questions", "questions": payload_batch}, timeout=60)
+                        if res.status_code == 200:
+                            st.success(res.json().get('message', 'Upload Successful!'))
+                            st.balloons()
+                        else:
+                            st.error(f"Upload Failed: {res.text}")
+                    except Exception as e:
+                        st.error(f"Connection Error: {e}")
