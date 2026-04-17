@@ -990,9 +990,13 @@ elif st.session_state.admin_mode == "Admin Portal (HITL)":
                 # Filter only accepted questions
                 payload_batch = [q for q in st.session_state.review_queue if st.session_state.review_decisions.get(q['id']) == True]
                 
-                with st.spinner("Encoding images and uploading to AWS..."):
+                # Progress bar for visual feedback during large uploads
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                with st.spinner("Encoding images and preparing batches..."):
                     for q in payload_batch:
-                        # If image exists, encode it to Base64 to safely transmit over HTTP
+                        # If image exists, encode it to Base64
                         if q.get('Requires_Diagram') and q.get('local_image_path'):
                             img_filename = os.path.basename(q['local_image_path'])
                             img_path = os.path.join(TEMP_IMG_DIR, img_filename)
@@ -1002,14 +1006,36 @@ elif st.session_state.admin_mode == "Admin Portal (HITL)":
                                     encoded = base64.b64encode(f.read()).decode("utf-8")
                                     q['image_base64'] = encoded
                                     q['image_filename'] = img_filename
-                                    
-                    # Send to Lambda
+
+                # --- THE FIX: BATCH THE UPLOADS TO BYPASS AWS 6MB LIMIT ---
+                CHUNK_SIZE = 10  # Safe size to keep payload under 6MB
+                total_chunks = (len(payload_batch) + CHUNK_SIZE - 1) // CHUNK_SIZE
+                
+                upload_failed = False
+                questions_uploaded = 0
+                
+                for i in range(0, len(payload_batch), CHUNK_SIZE):
+                    chunk = payload_batch[i:i + CHUNK_SIZE]
+                    current_chunk = (i // CHUNK_SIZE) + 1
+                    
+                    status_text.text(f"Uploading batch {current_chunk} of {total_chunks} to AWS...")
+                    
                     try:
-                        res = requests.post(API_URL, json={"action": "ingest_questions", "questions": payload_batch}, timeout=60)
+                        res = requests.post(API_URL, json={"action": "ingest_questions", "questions": chunk}, timeout=60)
                         if res.status_code == 200:
-                            st.success(res.json().get('message', 'Upload Successful!'))
-                            st.balloons()
+                            questions_uploaded += len(chunk)
+                            progress_bar.progress(questions_uploaded / len(payload_batch))
                         else:
-                            st.error(f"Upload Failed: {res.text}")
+                            st.error(f"Batch {current_chunk} Failed: {res.text}")
+                            upload_failed = True
+                            break
                     except Exception as e:
-                        st.error(f"Connection Error: {e}")
+                        st.error(f"Connection Error on batch {current_chunk}: {e}")
+                        upload_failed = True
+                        break
+                
+                if not upload_failed:
+                    status_text.empty()
+                    progress_bar.empty()
+                    st.success(f"✅ Successfully uploaded all {questions_uploaded} questions to AWS!")
+                    st.balloons()

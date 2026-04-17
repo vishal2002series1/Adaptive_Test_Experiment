@@ -111,27 +111,7 @@ Resources:
             MaxAge: 3600
 
   # 7. OpenSearch Serverless (Vector DB for Option A)
-  OptionAVectorDB:
-    Type: AWS::OpenSearchServerless::Collection
-    DependsOn: [VectorEncryptionPolicy, VectorNetworkPolicy]
-    Properties:
-      Name: "option-a-vector-db"
-      Type: "VECTORSEARCH"
-      Description: "Vector DB for Option A generated questions"
 
-  VectorEncryptionPolicy:
-    Type: AWS::OpenSearchServerless::SecurityPolicy
-    Properties:
-      Name: "option-a-enc-policy"
-      Type: "encryption"
-      Policy: '{"Rules":[{"ResourceType":"collection","Resource":["collection/option-a-vector-db"]}],"AWSOwnedKey":true}'
-
-  VectorNetworkPolicy:
-    Type: AWS::OpenSearchServerless::SecurityPolicy
-    Properties:
-      Name: "option-a-net-policy"
-      Type: "network"
-      Policy: '[{"Rules":[{"ResourceType":"collection","Resource":["collection/option-a-vector-db"]}],"AllowFromPublic":true}]'
 
   # 8. The LangGraph Multi-Agent Lambda Function
   TestGeneratorFunction:
@@ -148,10 +128,11 @@ Resources:
           HISTORY_TABLE: !Ref TestHistoryTable 
           WORKBOOK_TABLE: !Ref WorkbookCacheTable
           PENDING_TESTS_TABLE: !Ref PendingTestsTable 
-          QUESTION_BANK_TABLE: !Ref QuestionBankTable      # <-- NEW
-          IMAGES_BUCKET: !Ref QuestionImagesBucket         # <-- NEW
-          OPENSEARCH_ENDPOINT: !GetAtt OptionAVectorDB.CollectionEndpoint
-          GEMINI_API_KEY: "AIzaSyB-b6HTBUgPMafMIEQF1th_463JA7qglbM" # 🚨 PUT YOUR REAL API KEY HERE!
+          QUESTION_BANK_TABLE: !Ref QuestionBankTable
+          IMAGES_BUCKET: !Ref QuestionImagesBucket
+          UPSTASH_VECTOR_REST_URL: "https://vocal-rodent-92480-us1-vector.upstash.io"     # <-- NEW
+          UPSTASH_VECTOR_REST_TOKEN: "ABYFMHZvY2FsLXJvZGVudC05MjQ4MC11czFhZG1pbllqYzNaR1kxTWpJdE5tSmhaQzAwTkdGbExUaGpOVGN0WXpBMVpqVmhaREZsWXpJMw=="                    # <-- NEW
+          GEMINI_API_KEY: "AIzaSyDIeZw1VD7P-7pDZOz0NjnTNuZAtbR-2-w"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref StudentProfileTable
@@ -161,15 +142,10 @@ Resources:
             TableName: !Ref WorkbookCacheTable
         - DynamoDBCrudPolicy:
             TableName: !Ref PendingTestsTable
-        - DynamoDBCrudPolicy:                              # <-- NEW
-            TableName: !Ref QuestionBankTable              # <-- NEW
-        - S3CrudPolicy:                                    # <-- NEW
-            BucketName: !Ref QuestionImagesBucket          # <-- NEW
-        - Statement:
-            - Effect: Allow
-              Action:
-                - aoss:APIAccessAll
-              Resource: "*"
+        - DynamoDBCrudPolicy:                              
+            TableName: !Ref QuestionBankTable              
+        - S3CrudPolicy:                                    
+            BucketName: !Ref QuestionImagesBucket
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
@@ -180,37 +156,9 @@ Resources:
       DockerContext: .
       DockerTag: python3.11-v1
 
-  VectorDataAccessPolicy:
-    Type: AWS::OpenSearchServerless::AccessPolicy
-    Properties:
-      Name: "option-a-access-policy"
-      Type: "data"
-      Policy: !Sub >
-        [
-          {
-            "Rules": [
-              {
-                "ResourceType": "index",
-                "Resource": ["index/*/*"],
-                "Permission": ["aoss:*"]
-              },
-              {
-                "ResourceType": "collection",
-                "Resource": ["collection/option-a-vector-db"],
-                "Permission": ["aoss:*"]
-              }
-            ],
-            "Principal": [
-              "${TestGeneratorFunctionRole.Arn}",
-              "arn:aws:iam::258574424891:user/vishal-ey"
-            ]
-          }
-        ]
+  
 
 Outputs:
   GenerateTestFunctionUrl:
     Description: "Direct Lambda Function URL for POST requests (15-min timeout)"
     Value: !GetAtt TestGeneratorFunctionUrl.FunctionUrl
-  OpenSearchEndpoint:
-    Description: "Endpoint URL for the OpenSearch Vector DB"
-    Value: !GetAtt OptionAVectorDB.CollectionEndpoint

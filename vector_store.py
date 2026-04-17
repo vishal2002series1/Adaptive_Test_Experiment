@@ -1,14 +1,12 @@
 import os
 import json
-import boto3
 import math
 import time
-from opensearchpy import OpenSearch, RequestsHttpConnection, AWSV4SignerAuth
+from upstash_vector import Index
 from google import genai
 from google.genai import types 
 from schema import Question, StudentProfile
 from typing import List, Optional
-from dotenv import load_dotenv  
 
 # ==========================================
 # 1. CLOUD INITIALIZATION
@@ -17,28 +15,17 @@ from dotenv import load_dotenv
 api_key = os.environ.get("GEMINI_API_KEY")
 gemini_client = genai.Client(api_key=api_key)
 
-host = os.environ.get('OPENSEARCH_ENDPOINT', '').replace('https://', '')
-region = os.environ.get('AWS_REGION', 'us-east-1')
-service = 'aoss'
-
-INDEX_NAME = "adaptive-questions-v2"
-
-def get_opensearch_client():
-    if not host or host == "pending-console-setup":
-        return None
-        
-    credentials = boto3.Session().get_credentials()
-    auth = AWSV4SignerAuth(credentials, region, service)
-
-    return OpenSearch(
-        hosts=[{'host': host, 'port': 443}],
-        http_auth=auth,
-        use_ssl=True,
-        verify_certs=True,
-        connection_class=RequestsHttpConnection,
-        timeout=30,
-        pool_maxsize=20
-    )
+# Initialize Upstash Index using Env Vars
+try:
+    upstash_url = os.environ.get("UPSTASH_VECTOR_REST_URL")
+    upstash_token = os.environ.get("UPSTASH_VECTOR_REST_TOKEN")
+    if upstash_url and upstash_token:
+        index = Index(url=upstash_url, token=upstash_token)
+    else:
+        index = None
+except Exception as e:
+    print(f"⚠️ Upstash Init Error: {e}")
+    index = None
 
 def get_embedding(text: str) -> List[float]:
     try:
@@ -52,53 +39,17 @@ def get_embedding(text: str) -> List[float]:
         print(f"⚠️ Error generating embedding with Gemini: {e}")
         return []
 
-def _ensure_index_exists(client):
-    if not client.indices.exists(index=INDEX_NAME):
-        index_body = {
-            "settings": {"index.knn": True},
-            "mappings": {
-                "properties": {
-                    "embedding": {
-                        "type": "knn_vector",
-                        "dimension": 768, 
-                        "method": {
-                            "name": "hnsw",
-                            "space_type": "cosinesimil",
-                            "engine": "nmslib"
-                        }
-                    },
-                    "id": {"type": "keyword"},
-                    "exam": {"type": "keyword"},
-                    "subject": {"type": "keyword"},
-                    "topic": {"type": "keyword"},
-                    "sub_topic": {"type": "keyword"},
-                    "taxonomy_source": {"type": "keyword"},
-                    "difficulty": {"type": "integer"},
-                    "correct_answer": {"type": "keyword"},
-                    "created_at": {"type": "long"},  # 👉 NEW: Timestamp for tracking
-                    "expires_at": {"type": "long"}   # 👉 NEW: TTL Expiration marker
-                }
-            }
-        }
-        try:
-            client.indices.create(index=INDEX_NAME, body=index_body)
-            print(f"✅ Created new index: {INDEX_NAME}")
-        except Exception as e:
-            pass
-
 # ==========================================
 # 2. THE SAVER (INGESTION & DEDUPLICATION)
 # ==========================================
 
 def save_questions_to_db(questions: List[Question]):
-    client = get_opensearch_client()
-    if not client: return
-    _ensure_index_exists(client)
+    if not index: return
 
     for q in questions:
         if q.shared_context:
             print(f"   -> 🛡️ Bypassing Deduplication for Grouped Question: {q.id}")
-            _index_question(client, q)
+            _index_question(q)
             continue
 
         embed_text = f"Question: {q.text} Explanation: {q.explanation}"
@@ -107,72 +58,71 @@ def save_questions_to_db(questions: List[Question]):
         if not vector:
             continue
             
-        search_body = {
-            "size": 1,
-            "query": {
-                "bool": {
-                    "must": [
-                        {"knn": {"embedding": {"vector": vector, "k": 3}}}
-                    ],
-                    "filter": [
-                        {"term": {"exam": q.metadata.exam}}
-                    ]
-                }
-            }
-        }
-        
+        # Deduplication check in Upstash
+        safe_exam = q.metadata.exam.replace("'", "''")
         try:
-            response = client.search(index=INDEX_NAME, body=search_body)
-            hits = response.get('hits', {}).get('hits', [])
+            res = index.query(
+                vector=vector,
+                top_k=3,
+                include_metadata=True,
+                filter=f"exam = '{safe_exam}'"
+            )
             
             is_duplicate = False
-            if hits:
-                best_hit = hits[0]
-                score = best_hit.get('_score', 0)
-                existing_answer = best_hit.get('_source', {}).get('correct_answer')
+            if res and len(res) > 0:
+                best_hit = res[0]
+                # Upstash cosine score: 1.0 is an exact match. 0.98 is highly similar.
+                score = best_hit.score 
+                existing_answer = best_hit.metadata.get('correct_answer')
                 
-                if score >= 1.95 and existing_answer == q.correct_answer:
-                    print(f"   -> ♻️ Duplicate Found! Discarding {q.id} (Matches {best_hit['_source']['id']} with score {score:.2f})")
+                if score >= 0.98 and existing_answer == q.correct_answer:
+                    print(f"   -> ♻️ Duplicate Found! Discarding {q.id} (Matches {best_hit.id} with score {score:.2f})")
                     is_duplicate = True
             
             if not is_duplicate:
-                _index_question(client, q, vector)
+                _index_question(q, vector)
                 
         except Exception as e:
             print(f"⚠️ Search failed, saving anyway: {e}")
-            _index_question(client, q, vector)
+            _index_question(q, vector)
 
-def _index_question(client, q: Question, vector: List[float] = None):
+def _index_question(q: Question, vector: List[float] = None):
     if not vector:
         embed_text = f"Question: {q.text} Explanation: {q.explanation}"
         vector = get_embedding(embed_text)
         if not vector: return
 
-    doc = json.loads(q.model_dump_json())
-    doc['embedding'] = vector
-    doc['exam'] = q.metadata.exam
-    doc['subject'] = q.metadata.subject
-    doc['topic'] = q.metadata.topic
-    doc['sub_topic'] = q.metadata.sub_topic
-    doc['taxonomy_source'] = q.metadata.taxonomy_source
-    doc['difficulty'] = q.metadata.difficulty_level
-    doc['correct_answer'] = q.correct_answer
-    
-    # 👉 THE FIX: Inject creation and expiration timestamps
     current_time = int(time.time())
-    doc['created_at'] = current_time
     
-    # Check if the generator assigned a TTL (e.g., 180 days for current affairs)
+    # Extract metadata fields for Upstash filtering. 
+    # Strings must have internal single quotes escaped for Upstash SQL syntax.
+    metadata = {
+        "id": q.id,
+        "exam": q.metadata.exam,
+        "subject": q.metadata.subject,
+        "topic": q.metadata.topic,
+        "sub_topic": q.metadata.sub_topic,
+        "difficulty": q.metadata.difficulty_level,
+        "correct_answer": q.correct_answer,
+        "created_at": current_time,
+        # Pack the full JSON string to bypass schema mapping complexity!
+        "full_json": q.model_dump_json()
+    }
+    
+    # Handle TTL logic for Upstash filtering
     ttl_days = getattr(q.metadata, 'ttl_days', None)
     if ttl_days:
-        doc['expires_at'] = current_time + (ttl_days * 86400)
+        metadata['expires_at'] = current_time + (ttl_days * 86400)
         print(f"   -> ⏱️ Dynamic question detected. Setting expiration in {ttl_days} days.")
-    
+    else:
+        # Default expiration year 2099 to make the >= math operator easy
+        metadata['expires_at'] = 4070908800 
+
     try:
-        client.index(index=INDEX_NAME, body=doc)
-        print(f"   -> Embedded and saved question: {q.id}")
+        index.upsert(vectors=[(q.id, vector, metadata)])
+        print(f"   -> Embedded and saved question to Upstash: {q.id}")
     except Exception as e:
-        print(f"❌ Failed to save question {q.id} to OpenSearch: {e}")
+        print(f"❌ Failed to save question {q.id} to Upstash: {e}")
 
 # ==========================================
 # 3. THE RETRIEVER (SEARCH ENGINE)
@@ -187,64 +137,56 @@ def retrieve_best_question(
     student_profile: StudentProfile,
     exclude_ids: List[str]
 ) -> Optional[Question]:
-    client = get_opensearch_client()
-    if not client or not client.indices.exists(index=INDEX_NAME): return None
+    if not index: return None
 
     current_time = int(time.time())
 
-    query = {
-        "size": 1,
-        "query": {
-            "bool": {
-                "must": [
-                    {"term": {"exam": target_exam}}
-                ],
-                "must_not": [{"terms": {"id": exclude_ids}}],
-                # 👉 THE FIX: Filter out expired questions. 
-                # It accepts questions that don't have an expiration OR where the expiration is in the future.
-                "filter": [
-                    {
-                        "bool": {
-                            "should": [
-                                {"bool": {"must_not": {"exists": {"field": "expires_at"}}}},
-                                {"range": {"expires_at": {"gte": current_time}}}
-                            ],
-                            "minimum_should_match": 1
-                        }
-                    }
-                ]
-            }
-        }
-    }
+    # Build Upstash Metadata Filters (Syntax requires single quotes)
+    filters = [
+        f"exam = '{target_exam.replace('''', ''''')}'",
+        f"expires_at >= {current_time}"
+    ]
     
     if target_subject and target_subject not in ["All Syllabus", "Entire Syllabus"]:
-        query["query"]["bool"]["must"].append({"term": {"subject": target_subject}})
+        filters.append(f"subject = '{target_subject.replace('''', ''''')}'")
         
     if target_topic and target_topic not in ["All Syllabus", "General"]:
-        query["query"]["bool"]["must"].append({"term": {"topic": target_topic}})
+        filters.append(f"topic = '{target_topic.replace('''', ''''')}'")
         
     if target_sub_topic and target_sub_topic not in ["All Syllabus", "General"]:
-        clean_sub_topic = str(target_sub_topic).strip()
-        query["query"]["bool"]["must"].append({"term": {"sub_topic": clean_sub_topic}})
+        clean_sub_topic = str(target_sub_topic).strip().replace("'", "''")
+        filters.append(f"sub_topic = '{clean_sub_topic}'")
 
     if target_difficulty is not None:
-        query["query"]["bool"]["must"].append({"term": {"difficulty": target_difficulty}})
+        filters.append(f"difficulty = {target_difficulty}")
+        
+    if exclude_ids:
+        # Upstash IN operator: id NOT IN ('id1', 'id2')
+        safe_ids = [f"'{eid}'" for eid in exclude_ids]
+        filters.append(f"id NOT IN ({', '.join(safe_ids)})")
+
+    filter_string = " AND ".join(filters)
+
+    # We embed the query request to do a semantic search within the filtered results
+    query_text = f"{target_exam} {target_subject} {target_topic} {target_sub_topic}"
+    query_vector = get_embedding(query_text)
+    if not query_vector: return None
 
     try:
-        response = client.search(index=INDEX_NAME, body=query)
-        hits = response.get('hits', {}).get('hits', [])
-        if hits:
-            source = hits[0]['_source']
-            source.pop('embedding', None)
-            
-            # Remove our custom DB fields before initializing the Pydantic schema
-            for field in ['exam', 'subject', 'topic', 'sub_topic', 'taxonomy_source', 'difficulty', 'created_at', 'expires_at']:
-                source.pop(field, None)
-                
-            return Question(**source)
+        res = index.query(
+            vector=query_vector,
+            top_k=1,
+            include_metadata=True,
+            filter=filter_string
+        )
+        if res and len(res) > 0:
+            best_hit = res[0]
+            # Deserialize the full question payload
+            q_json = best_hit.metadata.get('full_json')
+            if q_json:
+                return Question(**json.loads(q_json))
     except Exception as e:
         print(f"⚠️ Retriever Search Error: {e}")
-        pass
         
     return None
 
