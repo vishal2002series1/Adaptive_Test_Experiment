@@ -15,8 +15,11 @@ try:
 except ImportError:
     add_script_run_ctx = None
 
+# # --- CONFIGURATION ---
+# API_URL = "https://2e7o2dai4vbtqzvs7x7qtcwuni0cqrim.lambda-url.us-east-1.on.aws/"
+
 # --- CONFIGURATION ---
-API_URL = "https://2e7o2dai4vbtqzvs7x7qtcwuni0cqrim.lambda-url.us-east-1.on.aws/"
+API_URL = "https://4sbvnmfkgevegvyu5s4aqc7b6y0wipxg.lambda-url.us-east-1.on.aws/"
 st.set_page_config(page_title="AI Adaptive Test Engine", layout="centered")
 
 # --- EPHEMERAL STORAGE FOR ECS ---
@@ -741,7 +744,7 @@ if st.session_state.admin_mode == "Student Platform":
                     }
                     
                     try:
-                        eval_response = requests.post(API_URL, json=eval_payload, timeout=300)
+                        eval_response = requests.post(API_URL, json=eval_payload, timeout=1500)
                         
                         try:
                             res_json = eval_response.json()
@@ -1021,7 +1024,7 @@ elif st.session_state.admin_mode == "Admin Portal (HITL)":
                     status_text.text(f"Uploading batch {current_chunk} of {total_chunks} to AWS...")
                     
                     try:
-                        res = requests.post(API_URL, json={"action": "ingest_questions", "questions": chunk}, timeout=60)
+                        res = requests.post(API_URL, json={"action": "ingest_questions", "questions": chunk}, timeout=120)
                         if res.status_code == 200:
                             questions_uploaded += len(chunk)
                             progress_bar.progress(questions_uploaded / len(payload_batch))

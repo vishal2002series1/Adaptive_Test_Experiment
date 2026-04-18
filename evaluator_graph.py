@@ -2,17 +2,37 @@ import os
 import json
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 from langgraph.graph import StateGraph, END
 
 from schema import EvaluationState, ProficiencyRecord
-# 👉 NEW: Import the history saving function
 from db import save_student_profile, save_test_history
 
+# 👉 NEW: Import the centralized Bedrock client and Claude constants
+from bedrock_client import bedrock_runtime
+
 load_dotenv()
-api_key = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=api_key)
+
+# Constants for Bedrock Claude
+CLAUDE_MODEL_ID = os.environ.get("MODEL_ID", "us.anthropic.claude-sonnet-4-6")
+ANTHROPIC_VERSION = "bedrock-2023-05-31"
+
+def invoke_claude(prompt: str, system_prompt: str = "", temperature: float = 0.2) -> str:
+    """Helper function to invoke Claude 3.5 Sonnet via Bedrock."""
+    body = {
+        "anthropic_version": ANTHROPIC_VERSION,
+        "max_tokens": 4096,
+        "temperature": temperature,
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    if system_prompt:
+        body["system"] = system_prompt
+
+    response = bedrock_runtime.invoke_model(
+        modelId=CLAUDE_MODEL_ID,
+        body=json.dumps(body)
+    )
+    result = json.loads(response["body"].read())
+    return result["content"][0]["text"]
 
 # ==========================================
 # AGENT NODES
@@ -128,22 +148,20 @@ def strategist_node(state: EvaluationState) -> dict:
         study_plan = "### Diagnostic Summary\nExcellent performance. 100% accuracy achieved. Proceed to the next module to continue advancing your overall readiness."
         profile.last_study_plan = study_plan
         save_student_profile(profile)
-        # 👉 UPDATE: Using the new DB function instead of local file write
         save_test_history(profile.student_id, profile.target_exam, score_percentage, graded_results, study_plan)
         return {"study_plan": study_plan, "profile": profile}
         
     mistakes_context = ""
     for m in mistakes:
-        # Inject the full 3-tier string so the LLM understands the exact context
         mistakes_context += f"- Taxonomy: {m['subject']} > {m['topic']} > {m['sub_topic']}\n"
         mistakes_context += f"  Fact missed: {m['explanation']}\n\n"
         
     history_context = f"Total Tests Taken: {profile.tests_taken}\n"
     history_context += f"Overall Exam Readiness: {profile.overall_readiness_score:.2f}/1.0\n"
     
+    system_prompt = f"You are a strict, professional academic evaluator and test strategist for the {profile.target_exam} exam."
+
     prompt = f"""
-    You are a strict, professional academic evaluator and test strategist for the {profile.target_exam} exam.
-    
     CURRENT TEST PERFORMANCE: Score: {score_percentage}%
     
     STUDENT'S MISTAKES:
@@ -164,12 +182,7 @@ def strategist_node(state: EvaluationState) -> dict:
     """
     
     try:
-        response = client.models.generate_content(
-            model='gemini-3.1-pro-preview',
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.2)
-        )
-        study_plan = response.text
+        study_plan = invoke_claude(prompt=prompt, system_prompt=system_prompt, temperature=0.2)
     except Exception as e:
         print(f"❌ Strategist error: {e}")
         study_plan = "Study plan generation temporarily unavailable."
@@ -178,7 +191,6 @@ def strategist_node(state: EvaluationState) -> dict:
     profile.last_study_plan = study_plan
     save_student_profile(profile) 
 
-    # 👉 UPDATE: Using the new DB function instead of local file write
     save_test_history(profile.student_id, profile.target_exam, score_percentage, graded_results, study_plan)
 
     return {"study_plan": study_plan, "profile": profile}

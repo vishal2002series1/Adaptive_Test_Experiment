@@ -7,3 +7,4 @@ opensearch-py
 requests-aws4auth
 requests
 upstash-vector
+aws-assume-role-lib

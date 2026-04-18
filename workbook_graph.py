@@ -3,8 +3,6 @@ import json
 import uuid
 from typing import TypedDict, List, Dict, Optional, Any
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 from langgraph.graph import StateGraph, END
 
 # Import schemas and DB functions
@@ -12,9 +10,14 @@ from schema import LearningWorkbook, VideoReference, StudentProfile
 from db import save_cached_workbook
 from vector_store import retrieve_best_question
 
+# 👉 NEW: Import the centralized Bedrock client
+from bedrock_client import bedrock_runtime
+
 load_dotenv()
-api_key = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=api_key)
+
+# Constants for Bedrock Claude
+CLAUDE_MODEL_ID = os.environ.get("MODEL_ID", "us.anthropic.claude-sonnet-4-6")
+ANTHROPIC_VERSION = "bedrock-2023-05-31"
 
 # ==========================================
 # 1. GRAPH STATE DEFINITION
@@ -33,7 +36,7 @@ class WorkbookState(TypedDict):
     tricks_and_mnemonics: str
     mermaid_graph_code: str
     
-    # 👉 UPDATED: Store both IDs and Full Questions
+    # Stored Questions
     practice_question_ids: List[str]
     practice_questions: List[Dict[str, Any]]
     
@@ -57,6 +60,24 @@ def clean_json_response(text: str) -> str:
         
     return text.strip()
 
+def invoke_claude(prompt: str, system_prompt: str = "", temperature: float = 0.3) -> str:
+    """Helper function to invoke Claude 3.5 Sonnet via Bedrock."""
+    body = {
+        "anthropic_version": ANTHROPIC_VERSION,
+        "max_tokens": 4096,
+        "temperature": temperature,
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    if system_prompt:
+        body["system"] = system_prompt
+
+    response = bedrock_runtime.invoke_model(
+        modelId=CLAUDE_MODEL_ID,
+        body=json.dumps(body)
+    )
+    result = json.loads(response["body"].read())
+    return result["content"][0]["text"]
+
 # ==========================================
 # 2. AGENT NODES
 # ==========================================
@@ -64,13 +85,13 @@ def clean_json_response(text: str) -> str:
 def researcher_node(state: WorkbookState) -> dict:
     print(f"🔍 Researcher: Sourcing video references for {state['sub_topic']}...")
     
+    system_prompt = f"You are an expert educational researcher for the {state['target_exam']} exam. Output ONLY valid JSON."
     prompt = f"""
-    You are an expert educational researcher for the {state['target_exam']} exam.
     Find or highly recommend 2 specific, realistic educational video titles and search-friendly URLs (like YouTube) that teach the concept of:
     Taxonomy: {state['subject']} > {state['topic']} > {state['sub_topic']}
     Difficulty Level: {state['difficulty_level']} out of 5.
     
-    Output strictly as a JSON array matching this schema:
+    Output strictly as a JSON array matching this schema (do NOT use markdown formatting, just the raw JSON):
     [
         {{
             "title": "Video Title",
@@ -80,12 +101,8 @@ def researcher_node(state: WorkbookState) -> dict:
     ]
     """
     try:
-        response = client.models.generate_content(
-            model='gemini-3.1-pro-preview',
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.3, response_mime_type="application/json")
-        )
-        videos = json.loads(clean_json_response(response.text))
+        response_text = invoke_claude(prompt=prompt, system_prompt=system_prompt, temperature=0.3)
+        videos = json.loads(clean_json_response(response_text))
         return {"video_references": videos}
     except Exception as e:
         print(f"❌ Researcher Error: {e}")
@@ -94,8 +111,8 @@ def researcher_node(state: WorkbookState) -> dict:
 def author_node(state: WorkbookState) -> dict:
     print(f"✍️ Author: Drafting theory and mnemonics (Difficulty {state['difficulty_level']})...")
     
+    system_prompt = f"You are an elite textbook author for the {state['target_exam']} exam. Output ONLY valid JSON."
     prompt = f"""
-    You are an elite textbook author for the {state['target_exam']} exam.
     Write an educational module for: {state['subject']} > {state['topic']} > {state['sub_topic']}.
     Target Difficulty: {state['difficulty_level']} out of 5.
     
@@ -105,7 +122,7 @@ def author_node(state: WorkbookState) -> dict:
     - Level 4-5: Focus on edge cases, complex synthesis, and expert-level nuance.
     
     REQUIREMENTS:
-    Output strictly as a JSON object with two keys:
+    Output strictly as a JSON object with two keys (do NOT use markdown formatting, just the raw JSON):
     1. "theory_markdown": A beautifully formatted markdown string (use bolding, headers, and bullet points) explaining the theory. MUST use $ for inline math and $$ for block math.
     2. "tricks_and_mnemonics": A markdown string detailing shortcuts, memory tricks, or common traps to avoid. MUST use $ for inline math and $$ for block math.
     
@@ -116,12 +133,8 @@ def author_node(state: WorkbookState) -> dict:
     }}
     """
     try:
-        response = client.models.generate_content(
-            model='gemini-3.1-pro-preview',
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.4, response_mime_type="application/json")
-        )
-        content = json.loads(clean_json_response(response.text))
+        response_text = invoke_claude(prompt=prompt, system_prompt=system_prompt, temperature=0.4)
+        content = json.loads(clean_json_response(response_text))
         return {
             "theory_markdown": content.get("theory_markdown", "Theory content unavailable."),
             "tricks_and_mnemonics": content.get("tricks_and_mnemonics", "No tricks available.")
@@ -133,18 +146,16 @@ def author_node(state: WorkbookState) -> dict:
 def designer_node(state: WorkbookState) -> dict:
     print(f"🎨 Designer: Creating Interactive Markmap hierarchy...")
     
+    system_prompt = f"You are an expert educational data visualizer preparing high-yield study materials for the {state['target_exam']} exam. Output ONLY a pure Nested Markdown List."
     prompt = f"""
-    You are an expert educational data visualizer preparing high-yield study materials for the {state['target_exam']} exam. 
     Your task is to create a highly focused, readable Mind Map for the following exact syllabus concept:
     
     Taxonomy: {state['subject']} > {state['topic']} > {state['sub_topic']}
     
     CRITICAL INSTRUCTIONS:
     1. Strict Exam Alignment: You must anchor the mind map strictly to the context of the '{state['target_exam']}' exam. 
-    2. No Domain Drift: Keep the content exclusively focused on the provided taxonomy. Do not hallucinate or drift into unrelated subjects, frameworks, or domains that fall outside of '{state['subject']}' and '{state['topic']}'.
-    3. Exam Utility: Ensure the nodes highlight the most testable concepts, relationships, mechanisms, or distinctions that a student must memorize to crack this specific exam.
-    
-    Instead of code, you must output a pure Nested Markdown List. 
+    2. No Domain Drift: Keep the content exclusively focused on the provided taxonomy. Do not hallucinate or drift into unrelated subjects.
+    3. Exam Utility: Ensure the nodes highlight the most testable concepts, relationships, mechanisms, or distinctions that a student must memorize.
     
     RULES:
     1. Start with a single H1 (#) representing the core topic ({state['sub_topic']}).
@@ -154,15 +165,9 @@ def designer_node(state: WorkbookState) -> dict:
     5. ONLY output the markdown list. Do not include introductory text.
     """
     try:
-        response = client.models.generate_content(
-            model='gemini-3.1-pro-preview',
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.2)
-        )
+        response_text = invoke_claude(prompt=prompt, system_prompt=system_prompt, temperature=0.2)
+        markdown_mindmap = response_text.strip()
         
-        markdown_mindmap = response.text.strip()
-        
-        # Clean up stray backticks if the LLM wraps it in a markdown block
         if markdown_mindmap.startswith("```markdown"):
             markdown_mindmap = markdown_mindmap[11:]
         elif markdown_mindmap.startswith("```"):
@@ -174,7 +179,7 @@ def designer_node(state: WorkbookState) -> dict:
     except Exception as e:
         print(f"❌ Designer Error: {e}")
         return {"mermaid_graph_code": "# Error\n## Failed to load mind map"}
-# 👉 UPDATED: Curator now extracts and returns the full question dictionary
+
 def curator_node(state: WorkbookState) -> dict:
     print(f"🗂️ Curator: Fetching practice questions from Vector DB...")
     
@@ -201,7 +206,6 @@ def curator_node(state: WorkbookState) -> dict:
     print(f"✅ Curator attached {len(fetched_ids)} practice questions.")
     return {"practice_question_ids": fetched_ids, "practice_questions": fetched_questions}
 
-# 👉 UPDATED: Compiler adds the full questions to the LearningWorkbook model
 def compiler_node(state: WorkbookState) -> dict:
     print("🏗️ Compiler: Assembling final Learning Workbook...")
     
@@ -235,7 +239,6 @@ workbook_workflow.add_node("designer", designer_node)
 workbook_workflow.add_node("curator", curator_node)
 workbook_workflow.add_node("compiler", compiler_node)
 
-# Sequential Pipeline
 workbook_workflow.set_entry_point("researcher")
 workbook_workflow.add_edge("researcher", "author")
 workbook_workflow.add_edge("author", "designer")

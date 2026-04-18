@@ -114,6 +114,7 @@ Resources:
 
 
   # 8. The LangGraph Multi-Agent Lambda Function
+  # 8. The LangGraph Multi-Agent Lambda Function
   TestGeneratorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -130,9 +131,12 @@ Resources:
           PENDING_TESTS_TABLE: !Ref PendingTestsTable 
           QUESTION_BANK_TABLE: !Ref QuestionBankTable
           IMAGES_BUCKET: !Ref QuestionImagesBucket
-          UPSTASH_VECTOR_REST_URL: "https://vocal-rodent-92480-us1-vector.upstash.io"     # <-- NEW
-          UPSTASH_VECTOR_REST_TOKEN: "ABYFMHZvY2FsLXJvZGVudC05MjQ4MC11czFhZG1pbllqYzNaR1kxTWpJdE5tSmhaQzAwTkdGbExUaGpOVGN0WXpBMVpqVmhaREZsWXpJMw=="                    # <-- NEW
-          GEMINI_API_KEY: "AIzaSyDIeZw1VD7P-7pDZOz0NjnTNuZAtbR-2-w"
+          UPSTASH_VECTOR_REST_URL: "https://key-panther-69228-us1-vector.upstash.io"
+          UPSTASH_VECTOR_REST_TOKEN: "ABUFMGtleS1wYW50aGVyLTY5MjI4LXVzMWFkbWluWkdVM1pEWm1OVEF0TXpsall5MDBOemMzTFdFMVkyTXRaV00wTnpSbU56VTFNamd4"
+          # 👉 NEW: Bedrock Cross-Account Configs
+          BEDROCK_TARGET_ROLE_ARN: "arn:aws:iam::258574424891:role/CrossAccountAdminRole"
+          BEDROCK_EXTERNAL_ID: "92F110A6-4E94-4359-82F3-C718DD537623"
+          TAVILY_API_KEY: "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"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref StudentProfileTable
@@ -146,6 +150,12 @@ Resources:
             TableName: !Ref QuestionBankTable              
         - S3CrudPolicy:                                    
             BucketName: !Ref QuestionImagesBucket
+        # 👉 NEW: Permission to assume Account 1 Role
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sts:AssumeRole
+              Resource: "arn:aws:iam::258574424891:role/CrossAccountAdminRole"
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
@@ -155,7 +165,6 @@ Resources:
       Dockerfile: Dockerfile
       DockerContext: .
       DockerTag: python3.11-v1
-
   
 
 Outputs:
